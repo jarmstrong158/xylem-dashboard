@@ -1,0 +1,144 @@
+/* Mobile-first. The phone is the primary target: this is served over Tailscale
+   and installed to a home screen, so every layout starts as one column and only
+   widens at a breakpoint. No web fonts, no CDN — the page must render with the
+   network entirely unavailable. */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #171a1f;
+  --muted: #5d6674;
+  --line: #dfe3e9;
+  --accent: #2f6f4f;
+  --warn: #9a5b00;
+  --bad: #a33131;
+  --chip: #eef1f5;
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216;
+    --panel: #161b22;
+    --ink: #e6e9ee;
+    --muted: #96a0af;
+    --line: #262d36;
+    --accent: #6fd39b;
+    --warn: #e0a33c;
+    --bad: #f2777a;
+    --chip: #1e242c;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+code, .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+
+.top {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: calc(14px + env(safe-area-inset-top)) 0 14px;
+}
+h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.01em; }
+.sub { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+/* Tabs scroll horizontally on a narrow screen rather than wrapping into a
+   two-row block that pushes content off the fold. */
+.tabs {
+  display: flex; gap: 6px; overflow-x: auto; margin: 14px 0;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex: 0 0 auto; padding: 9px 14px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--muted); border-radius: 999px;
+  font-size: 0.9rem; cursor: pointer; min-height: 40px;  /* touch target */
+}
+.tab[aria-selected="true"] {
+  color: var(--ink); border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 700px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px;
+}
+.card h3 { margin: 0 0 8px; font-size: 1rem; }
+.big { font-size: 1.8rem; font-weight: 650; line-height: 1.1; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip {
+  background: var(--chip); border-radius: 999px; padding: 3px 9px;
+  font-size: 0.78rem; color: var(--muted); white-space: nowrap;
+}
+.chip.bad  { color: var(--bad); }
+.chip.warn { color: var(--warn); }
+.chip.ok   { color: var(--accent); }
+
+.banner {
+  border: 1px solid var(--line); border-left: 3px solid var(--warn);
+  background: var(--panel); border-radius: var(--radius);
+  padding: 10px 12px; margin: 12px 0; font-size: 0.9rem;
+}
+.banner.info { border-left-color: var(--accent); }
+.banner strong { display: block; margin-bottom: 2px; }
+
+.row {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 10px;
+}
+.row .head {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline;
+  justify-content: space-between;
+}
+.row .title { font-weight: 600; }
+.badge {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 3px 8px; border-radius: 999px; background: var(--chip);
+  color: var(--muted); white-space: nowrap;
+}
+.badge.stale { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.badge.fresh { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.cause { margin-top: 8px; font-size: 0.86rem; color: var(--muted); }
+.cause li { margin: 3px 0; }
+ul { margin: 6px 0; padding-left: 18px; }
+
+/* Supersession chains render as reflowing rows, not a canvas graph: a
+   force-directed layout is unreadable and un-tappable on a phone, and a chain
+   is a path anyway — the shape carries no information a line doesn't. */
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.node {
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px;
+  background: var(--chip);
+  /* Node labels are entry summaries — real ones run past 200 characters. With
+     nowrap they blew the page out to 3700px of horizontal scroll on a 1500px
+     window, and far worse on a phone. Wrap, and cap the width so one long node
+     cannot dictate the row. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+@media (min-width: 700px) { .node { max-width: 46%; } }
+.node.superseded { opacity: 0.65; text-decoration: line-through; }
+.node.missing { border-style: dashed; color: var(--bad); }
+.arrow { color: var(--muted); }
+
+.muted { color: var(--muted); }
+.foot { margin: 28px 0 40px; color: var(--muted); font-size: 0.85rem; }
+.empty { color: var(--muted); padding: 20px 0; }

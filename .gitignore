@@ -1,0 +1,10 @@
+# The snapshot is the DATA, and it spans every project named in
+# CAMBIUM_PROJECTS — including private repos and ones with no remote. The site
+# in this directory is just code and is safe to publish; this file is not.
+# Regenerate it with:  cambium-mcp export-snapshot --out snapshot.json --bodies
+snapshot.json
+
+# Exported pages are full entry prose from every named project. Same rule as the
+# snapshot: this is the data, not the code.
+# Regenerate with:  cambium-mcp export-pages --out vault
+vault/

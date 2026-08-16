@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Xylem memory</title>
+<meta name="description" content="Cross-project view of context-keeper entries, cambium pages and quality gaps.">
+<meta name="theme-color" content="#12161c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Xylem">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Xylem memory</h1>
+    <p class="sub" id="subtitle">Loading snapshot…</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="banners"></div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-view="lessons" aria-selected="true">What we've learned</button>
+    <button class="tab" role="tab" data-view="projects" aria-selected="false">Projects</button>
+    <button class="tab" role="tab" data-view="chains" aria-selected="false">Supersession</button>
+    <button class="tab" role="tab" data-view="pages" aria-selected="false">Pages</button>
+    <button class="tab" role="tab" data-view="links" aria-selected="false">Links</button>
+    <button class="tab" role="tab" data-view="quality" aria-selected="false">Quality</button>
+  </nav>
+
+  <main>
+    <section id="view-lessons" class="view" aria-label="What we've learned"></section>
+    <section id="view-projects" class="view" hidden aria-label="Projects"></section>
+    <section id="view-chains" class="view" hidden aria-label="Supersession chains"></section>
+    <section id="view-pages" class="view" hidden aria-label="Pages"></section>
+    <section id="view-links" class="view" hidden aria-label="Proposed links"></section>
+    <section id="view-quality" class="view" hidden aria-label="Quality gaps"></section>
+  </main>
+
+  <footer class="foot">
+    <p>Built from <code>snapshot.json</code>. Regenerate with
+       <code>cambium-mcp export-snapshot --out snapshot.json</code>.</p>
+    <p class="muted" id="foot-note"></p>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
