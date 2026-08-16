@@ -250,19 +250,20 @@ function renderLinks(snap) {
     if (!l.proposals.length) return "";
     const rows = l.proposals.map((r) => `<li>
       <code>${esc(r.newer_id)}</code> may supersede <code>${esc(r.older_id)}</code>
-      ${r.both_signals ? `<span class="badge stale">both signals</span>` : ""}
+      ${r.tier === "likely" ? `<span class="badge stale">likely</span>` : ""}
       <div class="muted">${
         r.newer_summary ? esc(clamp(r.newer_summary, 90)) + "<br>replacing: "
                           + esc(clamp(r.older_summary || "", 90)) + "<br>" : ""
+      }${(r.replacement_signals || []).length
+          ? "evidence: " + esc(r.replacement_signals.join("; ")) + " · " : ""
       }overlap ${r.overlap_score ?? "?"}${
         r.shared_tags.length ? " · shares " + esc(r.shared_tags.join(", ")) : ""
-      }${r.strong_markers.length
-          ? " · says " + esc(r.strong_markers.join(", ")) : ""}</div></li>`);
+      }</div></li>`);
     return `<article class="row">
       <div class="head"><span class="title">${esc(p.name)}</span>
-        <span class="badge ${l.both_signals ? "stale" : ""}">${
+        <span class="badge ${l.likely ? "stale" : ""}">${
           plural(l.count, "proposal", "proposals")}${
-          l.both_signals ? `, ${l.both_signals} strong` : ""}</span></div>
+          l.likely ? `, ${l.likely} likely` : ""}</span></div>
       <div class="cause"><ul>${rows.join("")}</ul></div>
       ${l.unpaired_markers ? `<div class="cause muted">${
         plural(l.unpaired_markers, "entry says", "entries say")} something changed
@@ -271,10 +272,11 @@ function renderLinks(snap) {
   }).filter(Boolean);
   $("#view-links").innerHTML = (blocks.length ? blocks.join("") : "") +
     `<div class="banner info"><strong>Proposals only</strong>
-      Nothing has been written to any store. "These two entries look related" is
-      not the same claim as "this one replaced that one", and only the second
-      justifies an edge — an edge written from a heuristic silently demotes a
-      rule that may still be in force. Apply the ones you agree with via
+      Nothing has been written to any store. <em>likely</em> means the newer
+      entry names the older beside change language — measured 80% precision on
+      34 hand-labelled pairs. Everything else shares a subject and nothing more,
+      and a subject match is not a replacement: that signal measured 21.9%.
+      Apply the ones you agree with via
       <code>deprecate_entry(old, reason, superseded_by=new)</code>.</div>`;
 }
 
