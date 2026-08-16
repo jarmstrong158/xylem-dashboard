@@ -312,6 +312,32 @@ details.more > summary:hover { text-decoration: underline; }
 [data-pending="1"] { opacity: .55; pointer-events: none; }
 [data-decided] { border-color: var(--line-strong); }
 
+/* Details panel — everything needed to judge, inline. Built from the snapshot
+   already in memory, so it opens instantly and works offline. */
+.details {
+  margin-top: 11px; padding: 12px 14px; border-radius: var(--r-s);
+  background: var(--surface-sunk); border: 1px solid var(--line);
+}
+.detail-why {
+  margin: 0 0 12px; font-size: .82rem; color: var(--ink-2);
+  max-width: var(--measure);
+}
+.detail-entry + .detail-entry {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+}
+.detail-head {
+  display: flex; gap: 9px; align-items: baseline; flex-wrap: wrap;
+  font-size: .78rem;
+}
+.detail-title {
+  margin: 6px 0 0; font-weight: 600; font-size: .88rem; color: var(--ink);
+  max-width: var(--measure);
+}
+.detail-entry .prose { margin-top: 6px; font-size: .84rem; }
+.cand-title {
+  display: block; margin-top: 5px; font-size: .84rem; color: var(--ink);
+}
+
 .candidates { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
 .candidate {
   border: 1px solid var(--line); border-radius: var(--r-s);

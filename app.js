@@ -192,10 +192,23 @@ function renderLessons(snap) {
             topics, not yet cited — decide each one:</div>
             <div class="candidates">${law.unincorporated.map((e) => {
               const subject = `${law.id}:${e}`;
+              const cand = ENTRIES.get(e);
+              const shared = cand
+                ? (cand.tags || []).filter((t) => (law.topics || []).includes(t))
+                : [];
               return `<div class="candidate" data-subject="${esc(subject)}">
                 <code>${esc(e)}</code>
+                ${cand && cand.title
+                  ? `<span class="cand-title">${esc(clamp(cand.title, 90))}</span>` : ""}
                 ${actionBar(subject, { kind: "candidate", subject,
                                        law: law.id, older: e })}
+                ${detailsFor([e], shared.length
+                  ? `<p class="detail-why">Matched this law on
+                     <b>${esc(shared.join(", "))}</b>. Apply if the law should
+                     account for it; Not this if the overlap is incidental.</p>`
+                  : `<p class="detail-why">Shares this law's topics. Apply if the
+                     law should account for it; Not this if the overlap is
+                     incidental.</p>`)}
               </div>`;
             }).join("")}${
               law.unincorporated_count > law.unincorporated.length
@@ -419,6 +432,14 @@ function renderLinks(snap) {
         (r.shared_tags || []).length ? ` · shares <b>${esc(r.shared_tags.join(", "))}</b>` : ""}</div>
       ${actionBar(subject, { kind: "link", subject, project: p.name,
                              older: r.older_id, newer: r.newer_id })}
+      ${detailsFor([r.newer_id, r.older_id],
+        `<p class="detail-why">Apply records that <code>${esc(r.newer_id)}</code>
+         REPLACED <code>${esc(r.older_id)}</code>: the older entry becomes
+         <em>superseded</em> and stops being served as current. Read both below —
+         if they merely cover the same area, choose Not this.${
+           r.tier === "likely"
+             ? " Tier <b>likely</b>: the newer entry names the older beside change language (80% precision measured)."
+             : " Tier <b>lead</b>: they share a subject and nothing more (21.9% precision)."}</p>`)}
     </article>`;
     });
     return `<div class="section-h">${esc(p.name)} — ${
@@ -565,16 +586,63 @@ function paintDecision(row, action) {
   box.replaceChildren(tag, undo);
 }
 
+/* Every entry in the mesh, by id, so a review can show what it is actually
+   about rather than an id and a shrug. */
+const ENTRIES = new Map();
+function indexEntries(snap) {
+  for (const p of snap.projects) {
+    for (const e of p.entries || []) ENTRIES.set(e.id, { ...e, project: p.name });
+  }
+}
+
+/* The detail panel. Built from the snapshot the page already has, so opening it
+   costs nothing and works offline. */
+function detailsFor(ids, extra) {
+  const blocks = ids.map((id) => {
+    const e = ENTRIES.get(id);
+    if (!e) {
+      return `<div class="detail-entry"><code>${esc(id)}</code>
+        <p class="muted">Not in this snapshot — it may have been deleted, or it
+        belongs to a project that is not exported.</p></div>`;
+    }
+    return `<div class="detail-entry">
+      <div class="detail-head"><code>${esc(e.id)}</code>
+        <span class="muted">${esc(e.project)} · ${esc(e.kind)}${
+          e.status && e.status !== "active" ? ` · ${esc(e.status)}` : ""}</span></div>
+      ${e.title ? `<p class="detail-title">${esc(e.title)}</p>` : ""}
+      ${e.excerpt ? `<p class="prose">${esc(e.excerpt)}</p>` : ""}
+      ${(e.tags || []).length
+        ? `<div class="tagline">${e.tags.map((t) =>
+            `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}
+    </div>`;
+  }).join("");
+  return `<div class="details" hidden>${extra || ""}${blocks}</div>`;
+}
+
+function detailsToggle() {
+  return `<button class="act details-btn" type="button">Details</button>`;
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button.details-btn");
+  if (!btn) return;
+  const panel = btn.closest("[data-subject]").querySelector(".details");
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  btn.textContent = panel.hidden ? "Details" : "Hide details";
+});
+
 function actionBar(subject, payload) {
   if (!queueAvailable) return "";
   const decided = QUEUE.get(subject);
   if (decided) {
-    return `<span class="actions"><span class="decided">${
+    return `<span class="actions">${detailsToggle()}<span class="decided">${
       decided.action === "apply" ? "queued to apply" : "queued to dismiss"
     }</span></span>`;
   }
   const p = esc(JSON.stringify(payload));
   return `<span class="actions">
+    ${detailsToggle()}
     <button class="act apply" data-payload="${p}">Apply</button>
     <button class="act" data-payload="${p}" data-dismiss="1">Not this</button>
   </span>`;
@@ -633,6 +701,7 @@ fetch("snapshot.json", { cache: "no-store" })
     return loadQueue().then(() => snap);
   })
   .then((snap) => {
+    indexEntries(snap);
     renderKpis(snap);
     renderBanners(snap);
     counts(snap);
