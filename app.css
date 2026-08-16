@@ -277,6 +277,48 @@ details.more > summary:hover { text-decoration: underline; }
 .seen { margin-top: 9px; font-size: .78rem; color: var(--ink-2); }
 .seen b { color: var(--ink-2); font-weight: 550; }
 
+/* ------------------------------------------------------- workbench actions
+   Buttons are 40px so a thumb can hit them, and a decided row keeps its place
+   in the list rather than vanishing: a review pass where items disappear as you
+   judge them loses your position on every tap. */
+.actions {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px;
+}
+.act {
+  min-height: 40px; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); font: 600 .82rem/1 inherit; font-family: inherit;
+}
+.act:hover { border-color: var(--line-strong); }
+.act.apply { border-color: var(--series-1); color: var(--series-1); }
+.act:active { transform: translateY(1px); }
+
+.decided {
+  font-size: .78rem; font-weight: 600; color: var(--ink-2);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.decided::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--good); display: inline-block;
+}
+.decided.bad::before { background: var(--critical); }
+
+.linkish {
+  background: none; border: 0; padding: 4px 6px; cursor: pointer;
+  color: var(--series-1); font: 500 .78rem/1 inherit; font-family: inherit;
+}
+.linkish:hover { text-decoration: underline; }
+
+[data-pending="1"] { opacity: .55; pointer-events: none; }
+[data-decided] { border-color: var(--line-strong); }
+
+.candidates { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
+.candidate {
+  border: 1px solid var(--line); border-radius: var(--r-s);
+  padding: 9px 11px; background: var(--surface-sunk);
+}
+.candidate .actions { margin-top: 8px; }
+
 .ids { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
 .ids code {
   background: var(--surface-sunk); border-radius: var(--r-s);

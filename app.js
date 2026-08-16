@@ -189,12 +189,18 @@ function renderLessons(snap) {
           <div class="seen">Seen in<br><b>${
             esc((law.evidence_projects || []).join(", ") || "—")}</b></div>
           ${stale ? `<div class="seen" style="margin-top:12px">Carries this law's
-            topics, not yet cited — a review list, not a verdict:</div>
-            <div class="ids">${law.unincorporated.map((e) =>
-              `<code>${esc(e)}</code>`).join("")}${
+            topics, not yet cited — decide each one:</div>
+            <div class="candidates">${law.unincorporated.map((e) => {
+              const subject = `${law.id}:${e}`;
+              return `<div class="candidate" data-subject="${esc(subject)}">
+                <code>${esc(e)}</code>
+                ${actionBar(subject, { kind: "candidate", subject,
+                                       law: law.id, older: e })}
+              </div>`;
+            }).join("")}${
               law.unincorporated_count > law.unincorporated.length
-                ? `<span class="muted" style="font-size:.74rem">+${
-                    law.unincorporated_count - law.unincorporated.length} more</span>` : ""}
+                ? `<div class="muted" style="font-size:.74rem;margin-top:6px">+${
+                    law.unincorporated_count - law.unincorporated.length} more</div>` : ""}
             </div>` : ""}
         </aside>
       </div>
@@ -395,7 +401,9 @@ function renderLinks(snap) {
         <div class="meta">${esc(l.reason || "not run")}</div></article>`;
     }
     if (!l.proposals.length) return "";
-    const rows = l.proposals.map((r) => `<article class="row">
+    const rows = l.proposals.map((r) => {
+      const subject = `${p.name}:${r.newer_id}:${r.older_id}`;
+      return `<article class="row" data-subject="${esc(subject)}">
       <div class="head">
         <span class="title"><code>${esc(r.newer_id)}</code> may supersede
           <code>${esc(r.older_id)}</code></span>
@@ -409,7 +417,10 @@ function renderLinks(snap) {
         : ""}
       <div class="seen">overlap ${esc(String(r.overlap_score ?? "?"))}${
         (r.shared_tags || []).length ? ` · shares <b>${esc(r.shared_tags.join(", "))}</b>` : ""}</div>
-    </article>`);
+      ${actionBar(subject, { kind: "link", subject, project: p.name,
+                             older: r.older_id, newer: r.newer_id })}
+    </article>`;
+    });
     return `<div class="section-h">${esc(p.name)} — ${
       plural(l.count, "proposal", "proposals")}${l.likely ? `, ${l.likely} likely` : ""}</div>${rows.join("")}`;
   }).filter(Boolean);
@@ -489,6 +500,94 @@ function renderQuality(snap) {
     + `<div class="section-h">By project</div>` + blocks.join("");
 }
 
+/* --------------------------------------------------------------- decisions
+   The phone records what you decided; the desktop applies it. Queueing is
+   deliberately NOT a write to any store — see the Worker. The UI reflects the
+   decision immediately so a review pass feels like one, and the queue is the
+   authority on what has already been decided. */
+const QUEUE = new Map();          // subject -> {action, ...}
+let queueAvailable = false;
+
+async function loadQueue() {
+  try {
+    const r = await fetch("api/queue", { cache: "no-store" });
+    if (!r.ok) throw new Error(String(r.status));
+    const data = await r.json();
+    QUEUE.clear();
+    for (const it of data.items || []) QUEUE.set(it.subject, it);
+    queueAvailable = true;
+  } catch {
+    // Read-only mode is a legitimate state (opened from a local file server,
+    // or the Worker's KV not bound). Say so rather than showing dead buttons.
+    queueAvailable = false;
+  }
+}
+
+async function decide(payload, btn) {
+  const row = btn.closest("[data-subject]");
+  row.dataset.pending = "1";
+  try {
+    const r = await fetch("api/queue", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    QUEUE.set(payload.subject, payload);
+    paintDecision(row, payload.action);
+  } catch (e) {
+    row.dataset.pending = "";
+    const err = document.createElement("span");
+    err.className = "decided bad";
+    err.textContent = "could not queue — try again";
+    row.querySelector(".actions").replaceChildren(err);
+  }
+}
+
+function paintDecision(row, action) {
+  row.dataset.pending = "";
+  row.dataset.decided = action;
+  const box = row.querySelector(".actions");
+  if (!box) return;
+  const tag = document.createElement("span");
+  tag.className = "decided";
+  tag.textContent = action === "apply" ? "queued to apply" : "queued to dismiss";
+  const undo = document.createElement("button");
+  undo.className = "linkish";
+  undo.textContent = "undo";
+  undo.addEventListener("click", () => {
+    const sub = row.dataset.subject;
+    const prev = QUEUE.get(sub);
+    if (!prev) return;
+    decide({ ...prev, action: prev.action === "apply" ? "dismiss" : "apply" },
+           undo);
+  });
+  box.replaceChildren(tag, undo);
+}
+
+function actionBar(subject, payload) {
+  if (!queueAvailable) return "";
+  const decided = QUEUE.get(subject);
+  if (decided) {
+    return `<span class="actions"><span class="decided">${
+      decided.action === "apply" ? "queued to apply" : "queued to dismiss"
+    }</span></span>`;
+  }
+  const p = esc(JSON.stringify(payload));
+  return `<span class="actions">
+    <button class="act apply" data-payload="${p}">Apply</button>
+    <button class="act" data-payload="${p}" data-dismiss="1">Not this</button>
+  </span>`;
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button.act");
+  if (!btn) return;
+  const payload = JSON.parse(btn.dataset.payload);
+  payload.action = btn.dataset.dismiss ? "dismiss" : "apply";
+  decide(payload, btn);
+});
+
 /* ------------------------------------------------------------------- boot */
 const VIEWS = ["lessons", "projects", "chains", "pages", "links", "quality"];
 
@@ -525,9 +624,15 @@ fetch("snapshot.json", { cache: "no-store" })
     const t = snap.totals || {};
     $("#subtitle").textContent =
       `${plural(t.projects || 0, "project", "projects")} · ${t.entries || 0} entries`;
-    $("#foot-note").textContent = snap.includes_bodies
+    $("#foot-note").textContent = (snap.includes_bodies
       ? "Snapshot includes entry text — keep it private."
-      : "Snapshot carries ids and counts only.";
+      : "Snapshot carries ids and counts only.")
+      + (queueAvailable
+          ? ` ${QUEUE.size} decision(s) queued; run publish.ps1 on the desktop to apply.`
+          : " Read-only: decisions cannot be queued from here.");
+    return loadQueue().then(() => snap);
+  })
+  .then((snap) => {
     renderKpis(snap);
     renderBanners(snap);
     counts(snap);

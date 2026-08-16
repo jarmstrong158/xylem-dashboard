@@ -11,9 +11,9 @@
    query in index.html. Pinned at v1, an installed client served the first shell
    it ever cached forever — new markup against old styles, which presents as a
    broken dashboard rather than a stale one. */
-const SHELL = "xylem-shell-v2";
+const SHELL = "xylem-shell-v3";
 const DATA = "xylem-data-v1";
-const ASSETS = ["./", "index.html", "app.css?v=2", "app.js?v=2",
+const ASSETS = ["./", "index.html", "app.css?v=3", "app.js?v=3",
                 "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -31,15 +31,29 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
 
+  /* Only ever cache a genuine 200. Behind an auth gate an expired session
+     answers with a redirect to a login page; caching that would pin the login
+     screen into the app and it would never recover. `res.ok` is false for
+     redirects and errors alike, which is exactly the set to refuse. */
   if (url.pathname.endsWith("snapshot.json")) {
     e.respondWith(
       fetch(e.request).then((res) => {
-        const copy = res.clone();
-        caches.open(DATA).then((c) => c.put(e.request, copy));
+        if (res.ok && res.type === "basic") {
+          const copy = res.clone();
+          caches.open(DATA).then((c) => c.put(e.request, copy));
+        }
         return res;
       }).catch(() => caches.match(e.request))
     );
     return;
   }
-  e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request)));
+  e.respondWith(
+    caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
+      if (res.ok && res.type === "basic") {
+        const copy = res.clone();
+        caches.open(SHELL).then((c) => c.put(e.request, copy));
+      }
+      return res;
+    }))
+  );
 });

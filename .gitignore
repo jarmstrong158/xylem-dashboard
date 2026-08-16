@@ -8,3 +8,14 @@ snapshot.json
 # snapshot: this is the data, not the code.
 # Regenerate with:  cambium-mcp export-pages --out vault
 vault/
+
+# The publishable bundle. Contains snapshot.json, so it is data too.
+# Rebuild with:  python tools/build_dist.py
+dist/
+
+# wrangler's local state and build cache.
+.wrangler/
+
+# The path-token credential lives in ~/.xylem-dashboard-token, never in the
+# repo. wrangler holds the deployed copy as a Worker secret.
+*.token

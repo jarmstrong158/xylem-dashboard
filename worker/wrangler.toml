@@ -1,0 +1,36 @@
+name = "xylem-dashboard"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+# The built bundle, assembled by tools/build_dist.py from an ALLOWLIST. Never
+# point this at the repo root: vault/ lives there and is 433 files of full entry
+# prose from every named project.
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+# WITHOUT THIS THE GATE DOES NOT EXIST. Cloudflare serves a matching static
+# asset BEFORE invoking the Worker unless told otherwise, so /snapshot.json was
+# returned directly to anyone who asked — 869KB of private cross-project memory,
+# token never checked. Verified live, and it is the reason this file exists in
+# this shape. Every request must enter the Worker so the token check is on the
+# only path in.
+run_worker_first = true
+
+# Queued decisions made on the phone. The Worker NEVER writes to a store — it
+# records intents, and the desktop drains them through context-keeper's own
+# lifecycle tools. A stolen token can therefore enqueue nonsense but cannot
+# corrupt project memory, and the drain shows every pending action before it
+# applies anything.
+[[kv_namespaces]]
+binding = "QUEUE"
+id = "743432d6a8264164b61ad78240b74e98"
+
+[observability]
+enabled = true
+
+# Secret (set with `wrangler secret put`, NEVER in this file):
+#   AUTH_TOKEN  the path-token credential. The dashboard URL is
+#               https://xylem-dashboard.<subdomain>.workers.dev/<AUTH_TOKEN>/
+#               Same model as cambium-remote / context-keeper-remote /
+#               agentsync-remote. Rotate by setting a new secret; the old URL
+#               stops working immediately.
