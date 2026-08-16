@@ -1,144 +1,319 @@
-/* Mobile-first. The phone is the primary target: this is served over Tailscale
-   and installed to a home screen, so every layout starts as one column and only
-   widens at a breakpoint. No web fonts, no CDN — the page must render with the
-   network entirely unavailable. */
+/* Xylem memory — visual system.
+   Palette is the validated reference instance from the dataviz skill. Series
+   hue and status tokens were run through scripts/validate_palette.js against
+   both surfaces; the one WARN (status-warning at 1.79:1 on light) is why status
+   NEVER appears as a text color or as a fill behind text — it is a solid dot
+   beside an ink label, which is the documented relief and also keeps text in
+   text tokens rather than series color. */
 
 :root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --ink: #171a1f;
-  --muted: #5d6674;
-  --line: #dfe3e9;
-  --accent: #2f6f4f;
-  --warn: #9a5b00;
-  --bad: #a33131;
-  --chip: #eef1f5;
-  --radius: 12px;
+  color-scheme: light;
+
+  --plane:        #f9f9f7;   /* page */
+  --surface:      #fcfcfb;   /* cards, chart surface */
+  --surface-sunk: #f2f1ed;   /* chart tracks, inset wells */
+
+  --ink:          #0b0b0b;
+  --ink-2:        #52514e;
+  --ink-muted:    #898781;
+
+  --line:         #e1e0d9;   /* hairline grid */
+  --line-strong:  #c3c2b7;   /* baseline / axis */
+  --ring:         rgba(11, 11, 11, .10);
+
+  --series-1:     #2a78d6;   /* the one hue; nominal categories share it */
+  --series-1-dim: #cde2fb;
+
+  --good:         #0ca30c;
+  --warning:      #fab219;
+  --critical:     #d03b3b;
+
+  --measure: 68ch;           /* reading line length */
+  --r:  10px;
+  --r-s: 6px;
 }
+
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1216;
-    --panel: #161b22;
-    --ink: #e6e9ee;
-    --muted: #96a0af;
-    --line: #262d36;
-    --accent: #6fd39b;
-    --warn: #e0a33c;
-    --bad: #f2777a;
-    --chip: #1e242c;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --plane:        #0d0d0d;
+    --surface:      #1a1a19;
+    --surface-sunk: #232322;
+    --ink:          #ffffff;
+    --ink-2:        #c3c2b7;
+    --ink-muted:    #898781;
+    --line:         #2c2c2a;
+    --line-strong:  #383835;
+    --ring:         rgba(255, 255, 255, .10);
+    --series-1:     #3987e5;
+    --series-1-dim: #184f95;
   }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane:        #0d0d0d;
+  --surface:      #1a1a19;
+  --surface-sunk: #232322;
+  --ink:          #ffffff;
+  --ink-2:        #c3c2b7;
+  --ink-muted:    #898781;
+  --line:         #2c2c2a;
+  --line-strong:  #383835;
+  --ring:         rgba(255, 255, 255, .10);
+  --series-1:     #3987e5;
+  --series-1-dim: #184f95;
 }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--plane);
   color: var(--ink);
-  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-        "Helvetica Neue", Arial, sans-serif;
-  padding-bottom: env(safe-area-inset-bottom);
+  font: 400 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
 }
+
 code, .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.88em;
+  font-size: .86em;
+  color: var(--ink-2);
 }
-.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+/* ---------------------------------------------------------------- header */
 .top {
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
-  padding: calc(14px + env(safe-area-inset-top)) 0 14px;
+  padding: calc(26px + env(safe-area-inset-top)) 0 0;
+  background: var(--plane);
 }
-h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.01em; }
-.sub { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+.masthead {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+}
+h1 {
+  margin: 0; font-size: 1.15rem; font-weight: 650; letter-spacing: -.01em;
+}
+.sub { margin: 0; color: var(--ink-2); font-size: .8rem; }
 
-/* Tabs scroll horizontally on a narrow screen rather than wrapping into a
-   two-row block that pushes content off the fold. */
+/* KPI row — four tiles above the fold, nothing competing.
+   Values use proportional figures: tabular-nums makes display numbers loose. */
+.kpis {
+  display: grid; gap: 10px; margin-bottom: 22px;
+  grid-template-columns: repeat(2, 1fr);
+}
+/* 4-across only when a tile is genuinely wide enough for its caption. At 720px
+   four tiles are 165px each and "5 have new evidence to review" wraps to three
+   lines; 2x2 is comfortable well past that. */
+@media (min-width: 900px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+
+.kpi {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 14px 15px 13px;
+}
+.kpi .label {
+  font-size: .72rem; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ink-2); font-weight: 600;
+}
+.kpi .value {
+  font-size: 2.1rem; font-weight: 640; line-height: 1.05; letter-spacing: -.02em;
+  margin-top: 6px;
+}
+.kpi .value .of { font-size: .95rem; font-weight: 500; color: var(--ink-muted); }
+.kpi .foot {
+  margin-top: 7px; font-size: .78rem; color: var(--ink-2);
+  display: flex; align-items: center; gap: 6px; min-height: 18px;
+}
+
+/* Status = a solid dot + an ink label. Never a text color, never a fill behind
+   text: status-warning measures 1.79:1 on the light surface, so the validator
+   obligates a visible label rather than colour alone. */
+.dot {
+  /* inline-block, not inline: a bare span ignores width/height. This worked
+     inside .kpi .foot and .state only because flex items get blockified, and
+     silently vanished the moment a dot was used in a table cell. Third time
+     this exact trap has bitten in this file — meter, bar, dot. */
+  display: inline-block; vertical-align: middle;
+  width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px;
+  background: var(--ink-muted);
+}
+.dot.good { background: var(--good); }
+.dot.warn { background: var(--warning); }
+.dot.bad  { background: var(--critical); }
+
+/* ------------------------------------------------------------------ tabs */
 .tabs {
-  display: flex; gap: 6px; overflow-x: auto; margin: 14px 0;
-  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--line); margin-bottom: 22px;
+  -webkit-overflow-scrolling: touch;
 }
 .tabs::-webkit-scrollbar { display: none; }
 .tab {
-  flex: 0 0 auto; padding: 9px 14px; border: 1px solid var(--line);
-  background: var(--panel); color: var(--muted); border-radius: 999px;
-  font-size: 0.9rem; cursor: pointer; min-height: 40px;  /* touch target */
+  flex: 0 0 auto; padding: 10px 14px 11px; min-height: 42px;
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  color: var(--ink-muted); font-size: .88rem; font-weight: 500;
+  cursor: pointer; white-space: nowrap; font-family: inherit;
 }
-.tab[aria-selected="true"] {
-  color: var(--ink); border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--series-1); font-weight: 600; }
+.tab .n { color: var(--ink-muted); font-weight: 500; margin-left: 5px; font-size: .82em; }
 
+/* ----------------------------------------------------------------- cards */
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 16px 17px;
+}
 .grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
-@media (min-width: 700px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 640px) { .grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1000px) { .grid { grid-template-columns: repeat(3, 1fr); } }
 
-.card {
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px;
+/* The muted token measures 3.50:1 on the light surface — fine for axis chrome,
+   below AA for anything a reader has to READ. Everything carrying information
+   uses ink-2 (7.73:1 light / 9.72:1 dark); muted is reserved for de-emphasised
+   counts and disabled-ish states. */
+.section-h {
+  font-size: .74rem; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-2); font-weight: 650; margin: 26px 0 11px;
 }
-.card h3 { margin: 0 0 8px; font-size: 1rem; }
-.big { font-size: 1.8rem; font-weight: 650; line-height: 1.1; }
+.section-h:first-child { margin-top: 0; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.chip {
-  background: var(--chip); border-radius: 999px; padding: 3px 9px;
-  font-size: 0.78rem; color: var(--muted); white-space: nowrap;
+/* ---------------------------------------------------------- bar chart
+   Horizontal bars in plain HTML: label / track / direct-labelled value.
+   ONE hue for every bar — projects and issue types are nominal, and a
+   value-ramp on nominal categories double-encodes length as lightness. */
+.bars { display: flex; flex-direction: column; gap: 7px; }
+.bar-row {
+  display: grid; grid-template-columns: minmax(84px, 21%) 1fr auto;
+  align-items: center; gap: 11px; font-size: .84rem;
 }
-.chip.bad  { color: var(--bad); }
-.chip.warn { color: var(--warn); }
-.chip.ok   { color: var(--accent); }
-
-.banner {
-  border: 1px solid var(--line); border-left: 3px solid var(--warn);
-  background: var(--panel); border-radius: var(--radius);
-  padding: 10px 12px; margin: 12px 0; font-size: 0.9rem;
+.bar-row .name {
+  color: var(--ink-2); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.banner.info { border-left-color: var(--accent); }
-.banner strong { display: block; margin-bottom: 2px; }
+.bar-track {
+  display: block;               /* same inline-box trap as the meter */
+  background: var(--surface-sunk); border-radius: var(--r-s);
+  height: 11px; overflow: hidden;   /* thin marks; saturated fills stay small */
+}
+.bar-fill {
+  display: block; height: 100%; background: var(--series-1);
+  border-radius: 0 4px 4px 0;   /* 4px rounded data-end, anchored to baseline */
+  min-width: 2px;
+}
+.bar-row .val {
+  color: var(--ink); font-variant-numeric: tabular-nums; font-size: .82rem;
+  min-width: 3ch; text-align: right;
+}
 
+/* meter — a single ratio against its limit, same-ramp track */
+.meter { display: flex; flex-direction: column; gap: 6px; }
+/* display:block is load-bearing — these are spans, and an inline box ignores
+   both height and a percentage width, so the meter painted as a hairline of
+   track with no fill at all while computed style still reported the fill green. */
+.meter-track {
+  display: block; height: 8px; border-radius: 4px;
+  background: var(--surface-sunk); overflow: hidden;
+}
+.meter-fill {
+  display: block; height: 100%; background: var(--series-1); border-radius: 4px;
+}
+.meter-fill.good { background: var(--good); }
+.meter-fill.warn { background: var(--warning); }
+.meter-fill.bad  { background: var(--critical); }
+
+/* ------------------------------------------------------------ list rows */
 .row {
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 12px; margin-bottom: 10px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 14px 16px; margin-bottom: 9px;
 }
 .row .head {
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline;
-  justify-content: space-between;
+  display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
 }
-.row .title { font-weight: 600; }
-.badge {
-  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
-  padding: 3px 8px; border-radius: 999px; background: var(--chip);
-  color: var(--muted); white-space: nowrap;
+.row .title { font-weight: 600; font-size: .95rem; letter-spacing: -.005em; }
+.row .meta {
+  color: var(--ink-2); font-size: .78rem; margin-top: 3px;
 }
-.badge.stale { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
-.badge.fresh { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
-.cause { margin-top: 8px; font-size: 0.86rem; color: var(--muted); }
-.cause li { margin: 3px 0; }
-ul { margin: 6px 0; padding-left: 18px; }
 
-/* Supersession chains render as reflowing rows, not a canvas graph: a
-   force-directed layout is unreadable and un-tappable on a phone, and a chain
-   is a path anyway — the shape carries no information a line doesn't. */
-.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* state pill: hairline outline + dot + ink label. Not a coloured fill. */
+.state {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  font-size: .74rem; font-weight: 600; color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px 3px 8px;
+  white-space: nowrap; background: var(--surface);
+}
+
+/* A law card is two columns on a wide screen: argument on the left at a real
+   reading measure, provenance on the right. Constraining prose to 68ch inside a
+   1080px card is typographically right and visually broken — it left ~440px of
+   dead space beside every paragraph. */
+.law-body { display: grid; gap: 14px 26px; grid-template-columns: 1fr; }
+@media (min-width: 860px) {
+  .law-body { grid-template-columns: minmax(0, 1fr) 250px; }
+  .law-aside { border-left: 1px solid var(--line); padding-left: 20px; }
+}
+
+.prose {
+  max-width: var(--measure); color: var(--ink-2); font-size: .89rem;
+  line-height: 1.62; margin: 10px 0 0;
+}
+.prose.clamp {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+details.more > summary {
+  list-style: none; cursor: pointer; color: var(--series-1);
+  font-size: .8rem; font-weight: 550; margin-top: 8px; display: inline-block;
+}
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary:hover { text-decoration: underline; }
+
+.tagline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.tag {
+  font-size: .73rem; color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px;
+}
+
+.seen { margin-top: 9px; font-size: .78rem; color: var(--ink-2); }
+.seen b { color: var(--ink-2); font-weight: 550; }
+
+.ids { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+.ids code {
+  background: var(--surface-sunk); border-radius: var(--r-s);
+  padding: 2px 6px; font-size: .74rem; color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------------- notes */
+.note {
+  border: 1px solid var(--line); border-left: 3px solid var(--line-strong);
+  background: var(--surface); border-radius: var(--r);
+  padding: 11px 14px; margin: 0 0 16px; font-size: .85rem; color: var(--ink-2);
+  max-width: var(--measure);
+}
+.note.warn { border-left-color: var(--warning); }
+.note b { color: var(--ink); font-weight: 600; }
+
+.empty { color: var(--ink-muted); padding: 26px 0; font-size: .9rem; }
+.muted { color: var(--ink-muted); }
+.foot-note { margin: 34px 0 0; color: var(--ink-2); font-size: .78rem; }
+
+/* Supersession chains: a path reflows; a force graph does not, and a chain
+   carries no information a line doesn't. */
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .node {
-  border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px;
-  background: var(--chip);
-  /* Node labels are entry summaries — real ones run past 200 characters. With
-     nowrap they blew the page out to 3700px of horizontal scroll on a 1500px
-     window, and far worse on a phone. Wrap, and cap the width so one long node
-     cannot dictate the row. */
-  white-space: normal;
-  overflow-wrap: anywhere;
-  max-width: 100%;
-  flex: 0 1 auto;
+  border: 1px solid var(--line); border-radius: var(--r-s);
+  padding: 6px 10px; background: var(--surface-sunk);
+  font-size: .82rem; max-width: 100%; overflow-wrap: anywhere; flex: 0 1 auto;
 }
-@media (min-width: 700px) { .node { max-width: 46%; } }
-.node.superseded { opacity: 0.65; text-decoration: line-through; }
-.node.missing { border-style: dashed; color: var(--bad); }
-.arrow { color: var(--muted); }
+@media (min-width: 700px) { .node { max-width: 44%; } }
+.node.superseded { color: var(--ink-muted); }
+.node.missing { border-style: dashed; color: var(--critical); }
+.arrow { color: var(--ink-muted); font-size: .9rem; }
 
-.muted { color: var(--muted); }
-.foot { margin: 28px 0 40px; color: var(--muted); font-size: 0.85rem; }
-.empty { color: var(--muted); padding: 20px 0; }
+table.tv { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: 4px; }
+table.tv th, table.tv td {
+  text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line);
+}
+table.tv th { color: var(--ink-muted); font-weight: 600; font-size: .74rem;
+  text-transform: uppercase; letter-spacing: .04em; }
+table.tv td.n { text-align: right; font-variant-numeric: tabular-nums; }

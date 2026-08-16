@@ -7,9 +7,13 @@
    which case the page is still better than nothing, and the staleness it shows
    is the store's, not the cache's). */
 
-const SHELL = "xylem-shell-v1";
+/* SHELL must be bumped with every app.css/app.js change, in step with the ?v=
+   query in index.html. Pinned at v1, an installed client served the first shell
+   it ever cached forever — new markup against old styles, which presents as a
+   broken dashboard rather than a stale one. */
+const SHELL = "xylem-shell-v2";
 const DATA = "xylem-data-v1";
-const ASSETS = ["./", "index.html", "app.css", "app.js",
+const ASSETS = ["./", "index.html", "app.css?v=2", "app.js?v=2",
                 "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
