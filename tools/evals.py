@@ -16,11 +16,23 @@ The mistake underneath it was reaching for a model to call while being the
 model: everything these requests contain is already in the agent's context.
 Nothing in this file opens a socket or spawns a process, and nothing should.
 
-verdict     supersedes | related | unrelated | unsure
-confidence  low | medium | high
+Two kinds of request, because two different questions get sent here:
 
-Prefer `related` over `supersedes` when unsure. A wrong supersession silently
-retires a rule that is still in force, and nobody notices until it was needed.
+  link       key project:newer:older   did the newer entry REPLACE the older?
+             verdicts: supersedes | related | unrelated | unsure
+             Prefer `related` when unsure. A wrong supersession silently retires
+             a rule that is still in force, and nobody notices until it was
+             needed.
+
+  candidate  key law:entry             should this LAW account for this entry?
+             verdicts: cite | incidental | unsure
+             `cite` means the law is genuinely behind the corpus and the entry
+             belongs in it; say in the reasoning WHAT the law should absorb, not
+             just that it should. `incidental` means they share topic tags and
+             nothing else, which is the common case -- the work list is built
+             from a two-tag overlap, which is a hint, not a finding.
+
+confidence   low | medium | high
 """
 
 import argparse
@@ -37,7 +49,12 @@ PENDING = os.path.join(XYLEM_HOME, "eval-requests", "pending")
 DONE = os.path.join(XYLEM_HOME, "eval-requests", "done")
 JOURNAL = os.path.join(XYLEM_HOME, "apply-journal.jsonl")
 
-VERDICTS = ("supersedes", "related", "unrelated", "unsure")
+# A link asks "did this replace that". A law candidate asks "should this law
+# account for this entry". Different questions, so different words -- one shared
+# vocabulary would force both into vague verdicts that fit neither.
+LINK_VERDICTS = ("supersedes", "related", "unrelated", "unsure")
+CANDIDATE_VERDICTS = ("cite", "incidental", "unsure")
+VERDICTS = tuple(sorted(set(LINK_VERDICTS + CANDIDATE_VERDICTS)))
 CONFIDENCE = ("low", "medium", "high")
 
 try:
@@ -67,7 +84,7 @@ def _fields(entry):
 
 def load_decisions():
     base = {"dismissed_links": [], "law_citations": {}, "law_dismissed": {},
-            "link_evals": {}}
+            "link_evals": {}, "law_evals": {}}
     if os.path.exists(DECISIONS):
         try:
             with open(DECISIONS, encoding="utf-8") as f:
@@ -119,12 +136,30 @@ def cmd_list(_args):
             continue
         print("=" * 72)
         print("key      %s" % req["key"])
-        print("proposal %s may supersede %s   (project %s)"
-              % (req["newer"], req["older"], req["project"]))
-        print("\n--- NEWER: %s" % req["newer"])
-        print(_fields(req["newer_entry"]))
-        print("\n--- OLDER: %s" % req["older"])
-        print(_fields(req["older_entry"]))
+        if req.get("eval_kind") == "candidate":
+            law = req["law"]
+            print("question does law %s need to account for %s?  (project %s)"
+                  % (law.get("id"), req["entry_id"], req.get("project")))
+            print("verdicts %s" % " | ".join(CANDIDATE_VERDICTS))
+            print("\n--- LAW %s [%s]  recalls=%s"
+                  % (law.get("id"), law.get("scope"), law.get("recalls")))
+            print("  topics:  %s" % ", ".join(law.get("topics") or []))
+            print("  cites:   %s" % ", ".join(law.get("cites") or []) or "(none)")
+            print("  law:\n%s" % "\n".join(
+                "      " + ln for ln in (law.get("law") or "").splitlines()))
+            if law.get("evidence"):
+                print("  why:\n%s" % "\n".join(
+                    "      " + ln for ln in law["evidence"].splitlines()))
+            print("\n--- CANDIDATE ENTRY: %s" % req["entry_id"])
+            print(_fields(req["entry"]))
+        else:
+            print("question did %s replace %s?   (project %s)"
+                  % (req["newer"], req["older"], req["project"]))
+            print("verdicts %s" % " | ".join(LINK_VERDICTS))
+            print("\n--- NEWER: %s" % req["newer"])
+            print(_fields(req["newer_entry"]))
+            print("\n--- OLDER: %s" % req["older"])
+            print(_fields(req["older_entry"]))
         print()
     print("=" * 72)
     print('record with:  python tools/evals.py record "<key>" <verdict> '
@@ -133,8 +168,15 @@ def cmd_list(_args):
 
 
 def cmd_record(args):
-    if args.verdict not in VERDICTS:
-        print("verdict must be one of: %s" % ", ".join(VERDICTS))
+    # A candidate key is law:entry (one colon); a link key is project:newer:older
+    # (two). The shape picks the bucket, so a verdict cannot land where the
+    # renderer will not look for it.
+    is_candidate = args.key.count(":") == 1
+    allowed = CANDIDATE_VERDICTS if is_candidate else LINK_VERDICTS
+    if args.verdict not in allowed:
+        print("%s key takes one of: %s"
+              % ("candidate (law:entry)" if is_candidate else "link (project:newer:older)",
+                 ", ".join(allowed)))
         return 1
     if args.confidence not in CONFIDENCE:
         print("confidence must be one of: %s" % ", ".join(CONFIDENCE))
@@ -147,7 +189,9 @@ def cmd_record(args):
         return 1
 
     dec = load_decisions()
-    dec["link_evals"][args.key] = {
+    bucket = "law_evals" if is_candidate else "link_evals"
+    dec.setdefault(bucket, {})
+    dec[bucket][args.key] = {
         "verdict": args.verdict,
         "confidence": args.confidence,
         "reasoning": args.reasoning.strip(),

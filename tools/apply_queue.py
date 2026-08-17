@@ -234,25 +234,89 @@ def _entry_text(project, entry_id):
     return None
 
 
+def _find_entry_anywhere(entry_id):
+    """(project, entry) for an id, searched across every store.
+
+    A law candidate is queued with its project attached, but an intent queued
+    before that field existed has none, and guessing wrong files a request
+    describing the wrong entry."""
+    for name in sorted(os.listdir(REPOS)):
+        if not os.path.isdir(os.path.join(REPOS, name, ".context")):
+            continue
+        e = _entry_text(name, entry_id)
+        if e is not None:
+            return name, e
+    return None, None
+
+
+def _law_text(law_id):
+    """The law as the dashboard last published it.
+
+    Read from snapshot.json rather than cambium's scoped stores because that is
+    the artifact whose law text the reviewer is actually looking at on the
+    phone. It can trail the store by one publish; the entry it is weighed
+    against is read live, and the request records both so a stale pairing is
+    visible rather than silent."""
+    path = os.path.join(ROOT, "snapshot.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, ValueError):
+        return None
+    for law in ((snap.get("lessons") or {}).get("laws") or []):
+        if law.get("id") == law_id:
+            return {k: law.get(k) for k in
+                    ("id", "scope", "law", "topics", "cites", "evidence",
+                     "evidence_projects", "recalls")}
+    return None
+
+
 def file_eval(item, dry):
-    """Write a self-contained audit request. Touches no store."""
-    project, older, newer = item.get("project"), item.get("older"), item.get("newer")
-    a, b = _entry_text(project, newer), _entry_text(project, older)
-    if a is None or b is None:
-        missing = ", ".join(x for x, e in ((newer, a), (older, b)) if e is None)
-        return f"SKIP  eval {newer}->{older}: entry not found ({missing})", "skipped"
-    if dry:
-        return f"would file eval {newer} -> {older}  ({project})", "dry-run"
-    os.makedirs(EVAL_PENDING, exist_ok=True)
-    key = "%s:%s:%s" % (project, newer, older)
+    """Write a self-contained audit request. Touches no store.
+
+    Two shapes, because the question differs. A LINK asks whether the newer
+    entry replaced the older. A CANDIDATE asks whether a law should account for
+    an entry it does not cite, and what would change if it did."""
+    os.makedirs(EVAL_PENDING, exist_ok=True) if not dry else None
+
+    if item.get("kind") == "candidate":
+        law_id, entry_id = item.get("law"), item.get("older")
+        law = _law_text(law_id)
+        if law is None:
+            return f"SKIP  eval {law_id}: law not in snapshot.json", "skipped"
+        project = item.get("project")
+        entry = _entry_text(project, entry_id) if project else None
+        if entry is None:
+            project, entry = _find_entry_anywhere(entry_id)
+        if entry is None:
+            return f"SKIP  eval {law_id}/{entry_id}: entry not found", "skipped"
+        if dry:
+            return f"would file eval {entry_id} -> law {law_id}", "dry-run"
+        key = "%s:%s" % (law_id, entry_id)
+        payload = {"key": key, "eval_kind": "candidate", "law_id": law_id,
+                   "law": law, "project": project, "entry_id": entry_id,
+                   "entry": entry, "requested_at": _now()}
+        label = f"filed for eval {entry_id} -> law {law_id}  ({project})"
+    else:
+        project, older, newer = item.get("project"), item.get("older"), item.get("newer")
+        a, b = _entry_text(project, newer), _entry_text(project, older)
+        if a is None or b is None:
+            missing = ", ".join(x for x, e in ((newer, a), (older, b)) if e is None)
+            return f"SKIP  eval {newer}->{older}: entry not found ({missing})", "skipped"
+        if dry:
+            return f"would file eval {newer} -> {older}  ({project})", "dry-run"
+        key = "%s:%s:%s" % (project, newer, older)
+        payload = {"key": key, "eval_kind": "link", "project": project,
+                   "older": older, "newer": newer, "requested_at": _now(),
+                   "newer_entry": a, "older_entry": b}
+        label = f"filed for eval {newer} -> {older}  ({project})"
+
     name = key.replace(":", "_") + ".json"
-    payload = {"key": key, "project": project, "older": older, "newer": newer,
-               "requested_at": _now(), "newer_entry": a, "older_entry": b}
     tmp = os.path.join(EVAL_PENDING, name + ".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
     os.replace(tmp, os.path.join(EVAL_PENDING, name))
-    return f"filed for eval {newer} -> {older}  ({project})", "ok"
+    return label, "ok"
 
 
 def apply_link(item, dry):
@@ -318,11 +382,13 @@ def main():
             print("  " + msg)
             rec.update(project=it.get("project"), older=it.get("older"),
                        newer=it.get("newer"), outcome=outcome)
-        elif kind == "link" and action == "eval":
+        elif action == "eval":
+            # Both kinds route here. Must stay ABOVE the candidate branch below,
+            # which handles only apply/dismiss.
             msg, outcome = file_eval(it, dry)
             print("  " + msg)
             rec.update(project=it.get("project"), older=it.get("older"),
-                       newer=it.get("newer"), outcome=outcome)
+                       newer=it.get("newer"), law=it.get("law"), outcome=outcome)
         elif kind == "link" and action == "dismiss":
             key = "%s:%s:%s" % (it.get("project"), it.get("newer"), it.get("older"))
             if not dry and key not in dec["dismissed_links"]:

@@ -196,12 +196,20 @@ function renderLessons(snap) {
               const shared = cand
                 ? (cand.tags || []).filter((t) => (law.topics || []).includes(t))
                 : [];
+              const cev = (law.unincorporated_evals || {})[e];
               return `<div class="candidate" data-subject="${esc(subject)}">
                 <code>${esc(e)}</code>
                 ${cand && cand.title
                   ? `<span class="cand-title">${esc(clamp(cand.title, 90))}</span>` : ""}
                 ${actionBar(subject, { kind: "candidate", subject,
-                                       law: law.id, older: e })}
+                                       law: law.id, older: e,
+                                       // The queued intent has to name the project
+                                       // itself: unlike a link, a candidate id
+                                       // arrives with no project attached, and the
+                                       // desktop would have to guess which store
+                                       // holds it.
+                                       project: (cand || {}).project })}
+                ${cev ? evalBlock(cev) : ""}
                 ${detailsFor([e], shared.length
                   ? `<p class="detail-why">Matched this law on
                      <b>${esc(shared.join(", "))}</b>. Apply if the law should
@@ -408,9 +416,14 @@ function renderPages(snap) {
    than as an answer: the verdict word is not a status colour and there is no
    one-tap "do what it said". It did the reading; you still rule. */
 const EVAL_VERDICT = {
+  // link proposals
   supersedes: { label: "reads as a replacement", cls: "warn" },
   unrelated: { label: "reads as unrelated", cls: "unknown" },
   related: { label: "related, not a replacement", cls: "unknown" },
+  // law candidates
+  cite: { label: "the law should account for this", cls: "warn" },
+  incidental: { label: "overlap is incidental", cls: "unknown" },
+  // both
   unsure: { label: "could not tell", cls: "unknown" },
 };
 
@@ -684,12 +697,13 @@ function actionBar(subject, payload) {
     }</span></span>`;
   }
   const p = esc(JSON.stringify(payload));
-  // "Send for eval" only makes sense for a link: it asks an agent to read both
-  // entries and say whether one really replaced the other. A law candidate has
-  // no second entry to weigh it against.
-  const evalBtn = payload.kind === "link"
-    ? `<button class="act eval" data-payload="${p}" data-eval="1">Send for eval</button>`
-    : "";
+  // Both kinds get it; the question differs. For a link: did the newer entry
+  // really replace the older. For a law candidate: should this law account for
+  // this entry, and what would change if it did. The second is the harder read
+  // and the one most worth handing to something that will actually go and read
+  // the law and the entry side by side.
+  const evalBtn =
+    `<button class="act eval" data-payload="${p}" data-eval="1">Send for eval</button>`;
   return `<span class="actions">
     ${detailsToggle()}
     <button class="act apply" data-payload="${p}">Apply</button>
