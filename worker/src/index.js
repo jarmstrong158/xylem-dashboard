@@ -104,6 +104,9 @@ export default {
         const rec = {
           kind, action, subject,
           project: String(body.project || "").slice(0, 80),
+          // Which actionability bucket a mesh-wide request applies to:
+          // auto | review | blocked. Empty for per-item intents.
+          cls: String(body.cls || "").slice(0, 16),
           older: String(body.older || "").slice(0, 80),
           newer: String(body.newer || "").slice(0, 80),
           law: String(body.law || "").slice(0, 200),

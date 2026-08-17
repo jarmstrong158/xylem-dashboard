@@ -498,6 +498,91 @@ def _law_text(law_id):
     return None
 
 
+# Which issue types belong to which actionability bucket. Mirrors cambium's
+# _classify_gap deliberately: the button counts what the drain will act on, so a
+# card promising work the drain then declines is impossible by construction.
+CLASS_TYPES = {
+    "auto":    {"isolated", "unused", "legacy", "no_tags"},
+    "review":  {"thin_reason", "global_scope", "enforcement_missing",
+                "orphaned_scope", "mojibake"},
+    "blocked": {"code_drift"},
+}
+
+
+def _all_projects_with_gaps():
+    try:
+        with open(os.path.join(ROOT, "snapshot.json"), encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, ValueError):
+        return []
+    out = []
+    for p in snap.get("projects", []):
+        q = p.get("quality") or {}
+        if q.get("checked") and (q.get("gaps") or []):
+            out.append(p["name"])
+    return out
+
+
+def _quality_all(item, dry):
+    """Act on one actionability bucket across the whole mesh, from one tap.
+
+    auto     applied here and now -- no judgement, so nothing waits on a person
+    review   filed per project, narrowed to the issue types that need authored
+             text; the next session picks them up from the SessionStart hook
+    blocked  same, but the work is re-reading code against the entry, which is
+             the one thing that must never be automated (con-018-f4f2)
+
+    No model is called from this path and none may be (con-006-1f03). The two
+    filing buckets prepare work; a session that is already open does it."""
+    cls = (item.get("cls") or "").strip()
+    if cls not in CLASS_TYPES:
+        return "SKIP  unknown bucket %r" % cls, "skipped"
+    projects = _all_projects_with_gaps()
+    if not projects:
+        return "SKIP  nothing flagged anywhere", "skipped"
+
+    if cls == "auto":
+        if dry:
+            return "would repair %d project(s) mechanically" % len(projects), "dry-run"
+        fixed, left = 0, 0
+        for name in projects:
+            gaps = _quality_gaps_for(name) or []
+            n, rest = _repair_mechanical(name, gaps)
+            fixed += n
+            left += len(rest)
+        return ("repaired %d entr(ies) across %d project(s), %d still need a person"
+                % (fixed, len(projects), left)), "ok"
+
+    wanted = CLASS_TYPES[cls]
+    if dry:
+        return "would file %s work for %d project(s)" % (cls, len(projects)), "dry-run"
+    os.makedirs(EVAL_PENDING, exist_ok=True)
+    dec = load_decisions()
+    dec.setdefault("eval_pending", [])
+    filed = 0
+    for name in projects:
+        gaps = [g for g in (_quality_gaps_for(name) or [])
+                if {i.get("type") for i in g.get("issues", [])} & wanted]
+        if not gaps:
+            continue
+        key = "quality-%s:%s" % (cls, name)
+        payload = {"key": key, "eval_kind": "quality", "quality_class": cls,
+                   "project": name, "flagged": len(gaps),
+                   "entries": gaps[:QUALITY_CAP],
+                   "capped": max(0, len(gaps) - QUALITY_CAP),
+                   "requested_at": _now()}
+        tmp = os.path.join(EVAL_PENDING, key.replace(":", "_") + ".json.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, os.path.join(EVAL_PENDING, key.replace(":", "_") + ".json"))
+        if key not in dec["eval_pending"]:
+            dec["eval_pending"].append(key)
+        filed += 1
+    save_decisions(dec)
+    return ("filed %s work for %d project(s); the next session picks it up"
+            % (cls, filed)), "ok"
+
+
 def file_eval(item, dry):
     """Write a self-contained audit request. Touches no store.
 
@@ -505,6 +590,9 @@ def file_eval(item, dry):
     entry replaced the older. A CANDIDATE asks whether a law should account for
     an entry it does not cite, and what would change if it did."""
     os.makedirs(EVAL_PENDING, exist_ok=True) if not dry else None
+
+    if item.get("kind") == "quality" and (item.get("subject") or "").startswith("quality-all:"):
+        return _quality_all(item, dry)
 
     if item.get("kind") == "quality":
         project = item.get("project")

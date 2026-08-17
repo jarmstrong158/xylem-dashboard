@@ -688,15 +688,35 @@ function renderQuality(snap) {
     <p class="meta" style="margin:0 0 14px">${issueTotal} issues across ${flagged}
       flagged entries. They are not one queue — these four behave completely
       differently.</p>
-    ${Object.entries(CLS_COPY).map(([k, [title, why]]) => `
-      <div class="row" style="margin-bottom:8px">
+    ${Object.entries(CLS_COPY).map(([k, [title, why]]) => {
+      const n = cls[k];
+      const subject = `quality-all:${k}`;
+      const done = QUEUE.get(subject);
+      // `waiting` has no action by construction: no edit can clear it, so a
+      // button there would be a lie. Everything else gets one.
+      const act = (!queueAvailable || !n || k === "waiting") ? ""
+        : done
+        ? `<span class="actions"><span class="decided">${
+            esc(DECISION_LABEL[done.action] || "queued")}</span></span>`
+        : `<span class="actions"><button class="act ${k === "auto" ? "rec implement" : ""}"
+             data-payload="${esc(JSON.stringify({ kind: "quality", subject, cls: k }))}"
+             data-eval="1">${esc(
+               k === "auto" ? `Fix all ${n} now`
+               : k === "review" ? `Send all ${n} to be written`
+               : `Send all ${n} for a code read`)}</button>
+           <span class="muted" style="font-size:.75rem">${esc(
+             k === "auto" ? "applied by the desktop, no approval needed"
+             : "an open session does the work; nothing is spawned and nothing is billed")}</span></span>`;
+      return `<div class="row" style="margin-bottom:8px" data-subject="${esc(subject)}">
         <div class="head">
           <span class="title">${esc(title)}</span>
           ${state(k === "auto" ? "good" : k === "blocked" ? "bad" : k === "review" ? "warn" : "unknown",
-                  String(cls[k]))}
+                  String(n))}
         </div>
         <div class="meta">${esc(why)}</div>
-      </div>`).join("")}
+        ${act}
+      </div>`;
+    }).join("")}
   </div>`;
 
   /* The KPI counts flagged ENTRIES; this counts ISSUES, and one entry usually
