@@ -11,7 +11,7 @@
    query in index.html. Pinned at v1, an installed client served the first shell
    it ever cached forever — new markup against old styles, which presents as a
    broken dashboard rather than a stale one. */
-const SHELL = "xylem-shell-v4";
+const SHELL = "xylem-shell-v5";
 const DATA = "xylem-data-v1";
 const ASSETS = ["./", "index.html", "app.css?v=4", "app.js?v=4",
                 "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
