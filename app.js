@@ -206,7 +206,7 @@ function renderLessons(snap) {
                 <code>${esc(e)}</code>
                 ${cand && cand.title
                   ? `<span class="cand-title">${esc(clamp(cand.title, 90))}</span>` : ""}
-                ${actionBar(subject, cpayload)}
+                ${actionBar(subject, cpayload, cev)}
                 ${cev ? evalBlock(cev, cpayload) : ""}
                 ${detailsFor([e], shared.length
                   ? `<p class="detail-why">Matched this law on
@@ -405,8 +405,29 @@ function renderPages(snap) {
       — <code>cambium-mcp export-pages --out vault</code>.</p>
   </div>`;
 
+  /* One button for the whole set, not one per page. A stale page needs no
+     decision -- its body is regenerated from the entries it cites, so "stale"
+     means the sources moved. Rebuilding is deterministic, local and free, and
+     there is nothing to weigh page by page. */
+  const subject = "pages:all_stale";
+  const decided = QUEUE.get(subject);
+  const rebuild = !stale.length ? "" : `<article class="row" data-subject="${esc(subject)}">
+      <div class="head"><span class="title">${
+        plural(stale.length, "page is", "pages are")} stale</span>
+        ${state("warn", "rebuildable")}</div>
+      <div class="meta">Their sources changed after they were compiled. Pages are
+        build artifacts, so this is a recompile, not a decision — nothing is
+        judged and nothing is written to a store.</div>
+      ${!queueAvailable ? "" : decided
+        ? `<span class="actions"><span class="decided">queued to rebuild</span></span>`
+        : `<span class="actions"><button class="act implement"
+             data-payload="${esc(JSON.stringify({ kind: "pages", subject }))}"
+             data-implement="recompile">Rebuild ${
+               plural(stale.length, "stale page", "stale pages")}</button></span>`}
+    </article>`;
+
   $("#view-pages").innerHTML = head
-    + (stale.length ? `<div class="section-h">Needs attention</div>${staleCards}` : "")
+    + (stale.length ? `<div class="section-h">Needs attention</div>${rebuild}${staleCards}` : "")
     + `<div class="section-h">All pages by project</div>${table}`;
 }
 
@@ -481,13 +502,14 @@ function renderLinks(snap) {
       ${(r.replacement_signals || []).length
         ? `<div class="meta">${esc(r.replacement_signals.join("; "))}</div>` : ""}
       ${r.eval ? evalBlock(r.eval, payload) : ""}
+      ${/* action bar below carries the recommendation mark */ ""}
       ${r.newer_summary
         ? `<p class="prose">${esc(clamp(r.newer_summary, 130))}<br>
            <span class="muted">replacing:</span> ${esc(clamp(r.older_summary || "", 130))}</p>`
         : ""}
       <div class="seen">overlap ${esc(String(r.overlap_score ?? "?"))}${
         (r.shared_tags || []).length ? ` · shares <b>${esc(r.shared_tags.join(", "))}</b>` : ""}</div>
-      ${actionBar(subject, payload)}
+      ${actionBar(subject, payload, r.eval)}
       ${detailsFor([r.newer_id, r.older_id],
         `<p class="detail-why">Apply records that <code>${esc(r.newer_id)}</code>
          REPLACED <code>${esc(r.older_id)}</code>: the older entry becomes
@@ -630,7 +652,12 @@ const DECISION_LABEL = {
   apply: "queued to apply",
   dismiss: "queued to dismiss",
   eval: "sent for eval",
+  recompile: "queued to rebuild",
 };
+/* Actions with no opposite. Undo flips apply <-> dismiss because those are the
+   two sides of one ruling; asking for a read, or for a rebuild, has no inverse
+   to offer. */
+const NO_UNDO = new Set(["eval", "recompile"]);
 
 function paintDecision(row, action) {
   row.dataset.pending = "";
@@ -645,13 +672,12 @@ function paintDecision(row, action) {
   const tag = document.createElement("span");
   tag.className = "decided";
   tag.textContent = DECISION_LABEL[action] || action;
-  // Undo flips apply <-> dismiss, which are the two sides of one ruling. An
-  // eval is not a ruling and has no opposite: the buttons come back on their
-  // own once the drain clears it, with the agent's reading attached.
-  if (action === "eval") {
+  if (NO_UNDO.has(action)) {
     const note = document.createElement("span");
     note.className = "muted";
-    note.textContent = "verdict appears here after the next drain";
+    note.textContent = action === "eval"
+      ? "verdict appears here after the next drain"
+      : "rebuilt on the next drain";
     box.replaceChildren(tag, note);
     return;
   }
@@ -714,7 +740,7 @@ document.addEventListener("click", (e) => {
   btn.textContent = panel.hidden ? "Details" : "Hide details";
 });
 
-function actionBar(subject, payload) {
+function actionBar(subject, payload, verdict) {
   if (!queueAvailable) return "";
   const decided = QUEUE.get(subject);
   if (decided) {
@@ -722,19 +748,29 @@ function actionBar(subject, payload) {
       esc(DECISION_LABEL[decided.action] || decided.action)
     }</span></span>`;
   }
+  // Once an agent has read the pair, mark the button its verdict points at, so
+  // the recommendation lands on the control you would actually press rather
+  // than needing to be translated. Never colour alone: the filled treatment is
+  // paired with a visible "recommended" tag, because a reader who cannot
+  // separate the two hues would otherwise get no signal at all.
+  const rec = verdict ? (IMPLIES[verdict.verdict] || {}).action : null;
+  const mark = (which) => (rec === which ? " recommended" : "");
   const p = esc(JSON.stringify(payload));
   // Both kinds get it; the question differs. For a link: did the newer entry
   // really replace the older. For a law candidate: should this law account for
   // this entry, and what would change if it did. The second is the harder read
   // and the one most worth handing to something that will actually go and read
   // the law and the entry side by side.
-  const evalBtn =
-    `<button class="act eval" data-payload="${p}" data-eval="1">Send for eval</button>`;
+  // Once audited there is nothing left to send, so the button steps aside.
+  const evalBtn = verdict ? ""
+    : `<button class="act eval" data-payload="${p}" data-eval="1">Send for eval</button>`;
+  const recTag = rec
+    ? `<span class="rec-tag">recommended</span>` : "";
   return `<span class="actions">
     ${detailsToggle()}
-    <button class="act apply" data-payload="${p}">Apply</button>
-    <button class="act" data-payload="${p}" data-dismiss="1">Not this</button>
-    ${evalBtn}
+    <button class="act apply${mark("apply")}" data-payload="${p}">Apply</button>
+    <button class="act${mark("dismiss")}" data-payload="${p}" data-dismiss="1">Not this</button>
+    ${evalBtn}${recTag}
   </span>`;
 }
 

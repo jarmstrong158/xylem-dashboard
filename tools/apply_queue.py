@@ -319,6 +319,53 @@ def file_eval(item, dry):
     return label, "ok"
 
 
+def _cambium_env():
+    """The environment cambium's config reads.
+
+    Mirrors publish.ps1's map deliberately, including its rule: a store travels
+    because it is NAMED here, never because nothing excluded it."""
+    projects = {n: os.path.join(REPOS, n) for n in sorted(os.listdir(REPOS))
+                if os.path.isfile(os.path.join(REPOS, n, ".context",
+                                               "decisions.json"))}
+    return {
+        "CAMBIUM_PROJECTS": json.dumps(projects),
+        "CAMBIUM_REPO": CAMBIUM,
+        "CAMBIUM_AGENT_ID": "jonny-desktop",
+        "CAMBIUM_ORG_REPO": os.path.join(REPOS, "knowledge"),
+        "CAMBIUM_CONTEXT_KEEPER": os.path.join(REPOS, "context-keeper", "server.py"),
+    }
+
+
+def recompile_stale(item, dry):
+    """Rebuild every stale page. Deterministic, local, and free.
+
+    A page is a build artifact: its body is regenerated from the entries it
+    cites, so "stale" means the sources moved, not that anyone must decide
+    anything. There is no agent in this path and there must not be one -- asking
+    a model to reproduce what a compiler produces is slower, costs money, and
+    can disagree with the compiler.
+
+    Idempotent, so a repeated intent is harmless: recompiling an unchanged store
+    leaves body and source fingerprints identical and only moves compiled_at."""
+    if dry:
+        return "would recompile every stale page", "dry-run"
+    os.environ.update(_cambium_env())
+    sys.path.insert(0, CAMBIUM)
+    try:
+        import cambium_server as cb
+    except ImportError as e:
+        return f"FAILED recompile: cannot import cambium_server ({e})", "failed"
+    try:
+        res = json.loads(cb.recompile(all_stale=True))
+    except Exception as e:                      # noqa: BLE001 - report, never crash the drain
+        return f"FAILED recompile: {e}", "failed:" + str(e)[:120]
+    if res.get("error"):
+        return f"FAILED recompile: {res['error']}", "failed:" + str(res["error"])[:120]
+    rows = res.get("results") or res.get("pages") or []
+    changed = sum(1 for p in rows if p.get("changed"))
+    return ("recompiled %d stale page(s), %d changed" % (len(rows), changed)), "ok"
+
+
 def apply_link(item, dry):
     """The older entry becomes superseded, pointing at the newer one."""
     import server as ck
@@ -382,6 +429,10 @@ def main():
             print("  " + msg)
             rec.update(project=it.get("project"), older=it.get("older"),
                        newer=it.get("newer"), outcome=outcome)
+        elif kind == "pages":
+            msg, outcome = recompile_stale(it, dry)
+            print("  " + msg)
+            rec.update(outcome=outcome)
         elif action == "eval":
             # Both kinds route here. Must stay ABOVE the candidate branch below,
             # which handles only apply/dismiss.

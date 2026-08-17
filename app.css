@@ -321,6 +321,21 @@ details.more > summary:hover { text-decoration: underline; }
 .eval-act { margin-top: 10px; }
 .act.implement { border-color: var(--series-1); color: var(--series-1); font-weight: 650; }
 .candidate .eval-act { margin-top: 8px; }
+
+/* The button an agent's verdict points at. Filled rather than outlined, so it
+   reads as the primary control -- and ALWAYS paired with the .rec-tag below,
+   never carrying the signal in colour alone. Deliberately the series accent and
+   not a status colour: this is a recommendation, not a state the store is in. */
+.act.recommended {
+  background: var(--series-1); border-color: var(--series-1);
+  color: var(--surface); font-weight: 650;
+}
+.act.recommended:hover { filter: brightness(1.08); }
+.rec-tag {
+  font-size: .7rem; font-weight: 650; letter-spacing: .02em;
+  color: var(--series-1); text-transform: uppercase;
+  align-self: center;
+}
 .decided::before {
   content: ""; width: 9px; height: 9px; border-radius: 50%;
   background: var(--good); display: inline-block;
