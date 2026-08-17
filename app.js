@@ -206,7 +206,8 @@ function renderLessons(snap) {
                 <code>${esc(e)}</code>
                 ${cand && cand.title
                   ? `<span class="cand-title">${esc(clamp(cand.title, 90))}</span>` : ""}
-                ${actionBar(subject, cpayload, cev)}
+                ${actionBar(subject, cpayload, cev,
+                            (law.unincorporated_awaiting || []).includes(e))}
                 ${cev ? evalBlock(cev, cpayload) : ""}
                 ${detailsFor([e], shared.length
                   ? `<p class="detail-why">Matched this law on
@@ -509,7 +510,7 @@ function renderLinks(snap) {
         : ""}
       <div class="seen">overlap ${esc(String(r.overlap_score ?? "?"))}${
         (r.shared_tags || []).length ? ` · shares <b>${esc(r.shared_tags.join(", "))}</b>` : ""}</div>
-      ${actionBar(subject, payload, r.eval)}
+      ${actionBar(subject, payload, r.eval, r.awaiting_eval)}
       ${detailsFor([r.newer_id, r.older_id],
         `<p class="detail-why">Apply records that <code>${esc(r.newer_id)}</code>
          REPLACED <code>${esc(r.older_id)}</code>: the older entry becomes
@@ -740,7 +741,7 @@ document.addEventListener("click", (e) => {
   btn.textContent = panel.hidden ? "Details" : "Hide details";
 });
 
-function actionBar(subject, payload, verdict) {
+function actionBar(subject, payload, verdict, awaiting) {
   if (!queueAvailable) return "";
   const decided = QUEUE.get(subject);
   if (decided) {
@@ -761,16 +762,21 @@ function actionBar(subject, payload, verdict) {
   // this entry, and what would change if it did. The second is the harder read
   // and the one most worth handing to something that will actually go and read
   // the law and the entry side by side.
-  // Once audited there is nothing left to send, so the button steps aside.
-  const evalBtn = verdict ? ""
+  // Once audited there is nothing left to send. While a filed request is still
+  // waiting on a reader, say so -- the queue clears as soon as it drains, so
+  // without this the button would come straight back and the tap would look
+  // like it had failed.
+  const evalBtn = (verdict || awaiting) ? ""
     : `<button class="act eval" data-payload="${p}" data-eval="1">Send for eval</button>`;
+  const waitTag = (awaiting && !verdict)
+    ? `<span class="await-tag">sent for eval · awaiting verdict</span>` : "";
   const recTag = rec
     ? `<span class="rec-tag">recommended</span>` : "";
   return `<span class="actions">
     ${detailsToggle()}
     <button class="act apply${mark("apply")}" data-payload="${p}">Apply</button>
     <button class="act${mark("dismiss")}" data-payload="${p}" data-dismiss="1">Not this</button>
-    ${evalBtn}${recTag}
+    ${evalBtn}${waitTag}${recTag}
   </span>`;
 }
 

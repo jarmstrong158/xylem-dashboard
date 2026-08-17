@@ -336,6 +336,12 @@ details.more > summary:hover { text-decoration: underline; }
   color: var(--series-1); text-transform: uppercase;
   align-self: center;
 }
+/* Filed and waiting on a reader. Muted rather than accented -- it reports a
+   state, it does not ask for a tap. */
+.await-tag {
+  font-size: .74rem; font-weight: 600; color: var(--ink-2);
+  align-self: center;
+}
 .decided::before {
   content: ""; width: 9px; height: 9px; border-radius: 50%;
   background: var(--good); display: inline-block;

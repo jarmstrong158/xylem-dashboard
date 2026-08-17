@@ -112,19 +112,24 @@ def clear_queue():
         return json.loads(r.read().decode("utf-8"))
 
 
+# One place for the shape. `eval_pending` is what makes a filed-but-unjudged
+# request visible on the card; everything else is a recorded ruling.
+_EMPTY_DECISIONS = {"dismissed_links": [], "law_citations": {}, "law_dismissed": {},
+                    "link_evals": {}, "law_evals": {}, "eval_pending": []}
+
+
 def load_decisions():
     if os.path.exists(DECISIONS):
         try:
             with open(DECISIONS, encoding="utf-8") as f:
                 d = json.load(f)
             if isinstance(d, dict):
-                d.setdefault("dismissed_links", [])
-                d.setdefault("law_citations", {})
-                d.setdefault("law_dismissed", {})
+                for k, v in _EMPTY_DECISIONS.items():
+                    d.setdefault(k, json.loads(json.dumps(v)))
                 return d
         except (OSError, json.JSONDecodeError):
             pass
-    return {"dismissed_links": [], "law_citations": {}, "law_dismissed": {}}
+    return json.loads(json.dumps(_EMPTY_DECISIONS))
 
 
 def save_decisions(d):
@@ -139,6 +144,29 @@ def save_decisions(d):
 
 def _now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def resolve_eval(dec, key):
+    """A ruling ends the question, so retire any eval request for it.
+
+    Deciding a pair directly -- or acting on a verdict already given -- leaves
+    its filed request outstanding otherwise, and the next reader spends real
+    effort judging something that is already settled. The queue subject and the
+    eval key are the same string for both kinds, which is what makes this a
+    lookup rather than a reconstruction."""
+    changed = False
+    if key and key in dec.get("eval_pending", []):
+        dec["eval_pending"].remove(key)
+        changed = True
+    path = os.path.join(EVAL_PENDING, (key or "").replace(":", "_") + ".json")
+    if key and os.path.exists(path):
+        os.makedirs(EVAL_DONE, exist_ok=True)
+        try:
+            shutil.move(path, os.path.join(EVAL_DONE, os.path.basename(path)))
+        except OSError:
+            pass
+        changed = True
+    return changed
 
 
 def _stamp():
@@ -210,6 +238,7 @@ def journal(rec):
 
 
 EVAL_PENDING = os.path.join(XYLEM_HOME, "eval-requests", "pending")
+EVAL_DONE = os.path.join(XYLEM_HOME, "eval-requests", "done")
 
 
 def _entry_text(project, entry_id):
@@ -316,6 +345,16 @@ def file_eval(item, dry):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
     os.replace(tmp, os.path.join(EVAL_PENDING, name))
+
+    # Record that it is AWAITING a verdict, or the request becomes invisible.
+    # The queue is cleared the moment it drains, so without this the card reverts
+    # to offering "Send for eval" again and the tap looks like it did nothing --
+    # which is exactly how it read after 36 of them were filed successfully.
+    dec = load_decisions()
+    dec.setdefault("eval_pending", [])
+    if key not in dec["eval_pending"]:
+        dec["eval_pending"].append(key)
+        save_decisions(dec)
     return label, "ok"
 
 
@@ -464,6 +503,10 @@ def main():
             journal(dict(rec, outcome="skipped-unknown"))
             continue
         if not dry:
+            # A ruling settles the question; retire any eval request still open
+            # on it. Not for action == "eval", which is what CREATES one.
+            if action in ("apply", "dismiss"):
+                resolve_eval(dec, it.get("subject"))
             journal(rec)
         applied += 1
 

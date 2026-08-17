@@ -84,7 +84,7 @@ def _fields(entry):
 
 def load_decisions():
     base = {"dismissed_links": [], "law_citations": {}, "law_dismissed": {},
-            "link_evals": {}, "law_evals": {}}
+            "link_evals": {}, "law_evals": {}, "eval_pending": []}
     if os.path.exists(DECISIONS):
         try:
             with open(DECISIONS, encoding="utf-8") as f:
@@ -189,6 +189,9 @@ def cmd_record(args):
         return 1
 
     dec = load_decisions()
+    # The verdict IS the answer, so the request stops being outstanding.
+    if args.key in dec.get("eval_pending", []):
+        dec["eval_pending"].remove(args.key)
     bucket = "law_evals" if is_candidate else "link_evals"
     dec.setdefault(bucket, {})
     dec[bucket][args.key] = {
