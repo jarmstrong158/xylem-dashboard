@@ -58,7 +58,24 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPOS = r"C:\Users\jarms\repos"
 CAMBIUM = os.path.join(REPOS, "cambium")
 DECISIONS = os.path.join(CAMBIUM, ".cambium", "decisions.json")
-BASE = "https://xylem-dashboard.jarmstrong158.workers.dev"
+def _base():
+    """The deployed Worker's origin, read from disk beside the token.
+
+    Not hard-coded, because this repo is public. The token is what actually
+    gates the data and it has never been committed -- but publishing the
+    address too means an attacker needs one secret instead of two, and the
+    address costs nothing to keep out of the source. Set it with:
+
+        echo https://<name>.<subdomain>.workers.dev > ~/.xylem-dashboard-base
+    """
+    p = os.path.join(os.path.expanduser("~"), ".xylem-dashboard-base")
+    try:
+        with open(p, encoding="utf-8") as f:
+            return f.read().strip().rstrip("/")
+    except OSError:
+        raise SystemExit(
+            "no Worker origin configured. Write it to %s (one line, "
+            "https://...workers.dev)" % p)
 
 # Backups and the journal live OUTSIDE every repo, deliberately.
 #
@@ -103,12 +120,12 @@ def _open(url, method="GET"):
 
 
 def fetch_queue():
-    with _open(f"{BASE}/{token()}/api/queue") as r:
+    with _open(f"{_base()}/{token()}/api/queue") as r:
         return json.loads(r.read().decode("utf-8")).get("items", [])
 
 
 def clear_queue():
-    with _open(f"{BASE}/{token()}/api/queue", "DELETE") as r:
+    with _open(f"{_base()}/{token()}/api/queue", "DELETE") as r:
         return json.loads(r.read().decode("utf-8"))
 
 

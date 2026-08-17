@@ -44,7 +44,14 @@ Pop-Location
 Write-Host ""
 Write-Host "verifying the gate..." -ForegroundColor Cyan
 Start-Sleep -Seconds 15
-$base = "https://xylem-dashboard.jarmstrong158.workers.dev"
+# Read from disk, not hard-coded: this repo is public. The token is what gates
+# the data and has never been committed, but shipping the address too means an
+# attacker needs one secret instead of two.
+$baseFile = "$env:USERPROFILE\.xylem-dashboard-base"
+if (-not (Test-Path $baseFile)) {
+  throw "no Worker origin configured. Write it to $baseFile (one line, https://...workers.dev)"
+}
+$base = (Get-Content $baseFile -Raw).Trim().TrimEnd('/')
 $tok  = (Get-Content "$env:USERPROFILE\.xylem-dashboard-token" -Raw).Trim()
 $bad = 0
 foreach ($p in @("snapshot.json", "app.js", "")) {
