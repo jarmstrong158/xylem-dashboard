@@ -64,7 +64,6 @@
     --sap-soft:  #17301F;
     --bark:      #C0A183;
     --bark-soft: #2A231C;
-  --phone-bezel: #343B35;
     --phone-bezel: #343B35;
 
     --ui-surface: #1b1b19;
@@ -474,11 +473,14 @@ footer {
   <div class="hero-figure">
     <div>
       <p style="margin:0;color:var(--ink-2);font-size:1.02rem;max-width:52ch">
-      The suite is named after plant vascular tissue. <b>Cambium</b> is the growth layer
-      that produces new tissue; <b>xylem</b> is what carries material up through the plant;
-      <b>meristem</b> is where growth originates. The naming is not decoration &#8212; it
-      describes the architecture. Entries are laid down like growth rings, pages are
-      compiled from them, and laws are the few things worth carrying everywhere.</p>
+      The two stores underneath are <b>MCP servers</b>, so the same memory is readable from
+      Claude Code, Codex, a fresh Claude chat, the desktop app or the phone. A new session in
+      any client opens with the project's decisions already in hand rather than blind, and a
+      decision recorded in one client is in front of the next one, anywhere.</p>
+      <p style="margin:14px 0 0;color:var(--ink-2);font-size:1.02rem;max-width:52ch">
+      That is the difference from a wiki of files: a file has to be found and read. This is
+      handed over at session start, and it ages honestly &#8212; which is what the rest of
+      this page is about.</p>
     </div>
     <svg class="rings" viewBox="0 0 320 320" role="img" aria-label="Concentric rings: entries at the outside, pages compiled from them, laws at the core">
       <defs>
@@ -508,7 +510,7 @@ footer {
 
   <div class="stats">
     <div class="stat"><b>20</b><span>Projects</span></div>
-    <div class="stat"><b>432</b><span>Entries</span></div>
+    <div class="stat"><b>433</b><span>Entries</span></div>
     <div class="stat"><b>427</b><span>Compiled pages</span></div>
     <div class="stat"><b>19</b><span>Cross-project laws</span></div>
   </div>
@@ -527,18 +529,26 @@ footer {
   <em>visible</em>, and to put the decisions it produces somewhere they can actually be made.</p>
 
   <blockquote class="pull">
-    <p>The design constraint that shapes everything: the machine may compile, compare and
-    propose. It may not decide.</p>
+    <p>Ask of any piece of work: is it arithmetic, or is it judgement? Arithmetic must never
+    wait on a person. Judgement must never be automated.</p>
   </blockquote>
+
+  <p>That single line decides the whole design. The machine may compile, compare and propose;
+  it may not decide. Get it wrong toward automation and a heuristic silently retires a rule
+  that is still in force. Get it wrong toward caution and a hundred trivial repairs sit in a
+  queue waiting for somebody to open a terminal. Both happened here, and both are below.</p>
 </section>
 
 <section>
   <div class="col">
     <p class="kicker">Architecture</p>
     <h2>Three repositories, one direction of flow</h2>
-    <p>Nothing in the browser ever touches a store. The phone reads a committed JSON file
-    and writes back <em>intents</em>; every write happens on the desktop, through the same
-    lifecycle code a decision made in a terminal would use.</p>
+    <p><a href="https://github.com/jarmstrong158/context-keeper">context-keeper</a> holds the
+    entries, <a href="https://github.com/jarmstrong158/cambium">cambium</a> compiles them, and
+    <a href="https://github.com/jarmstrong158/xylem-dashboard">xylem-dashboard</a> is the
+    surface. Nothing in the browser ever touches a store: the phone reads a committed JSON
+    file and writes back <em>intents</em>, and every write happens on the desktop, through the
+    same lifecycle code a decision made in a terminal would use.</p>
   </div>
 
   <figure class="bleed">
@@ -609,7 +619,7 @@ footer {
 
     <div class="note-bark">
       <p><b>Why the hash wins.</b> Trusting <code>updated_at</code> alone means a maintenance
-      script that rewrites every record's timestamp marks all 427 pages stale overnight, and a
+      script that rewrites every record's timestamp marks every page stale overnight, and a
       hand-edit that fixes a typo in place marks none. Both readings are wrong in the direction
       that costs you trust in the signal.</p>
     </div>
@@ -764,7 +774,7 @@ footer {
       </table>
     </div>
     <figcaption><b>Pages &#8212; 427 of them.</b> Stale ones become cards naming the entry that
-    caused it; everything else collapses to one row per project. Rendering 427 identical
+    caused it; everything else collapses to one row per project. Rendering one identical
     &#8220;fresh&#8221; cards was the first version, and it made the view useless &#8212; the fix was deciding
     that <em>only exceptions deserve a card</em>.</figcaption>
   </figure>
@@ -773,12 +783,12 @@ footer {
     <div class="ui">
       <div class="ui-bars">
         <div class="ui-bar"><span>unused</span><i style="width:100%"></i><b>223</b></div>
-        <div class="ui-bar"><span>isolated</span><i style="width:69%"></i><b>155</b></div>
+        <div class="ui-bar"><span>isolated</span><i style="width:17%"></i><b>37</b></div>
         <div class="ui-bar"><span>code_drift</span><i style="width:19%"></i><b>43</b></div>
         <div class="ui-bar"><span>legacy</span><i style="width:12%"></i><b>26</b></div>
         <div class="ui-bar"><span>enforcement</span><i style="width:7%"></i><b>15</b></div>
       </div>
-      <div class="ui-meta" style="margin:14px 0 18px">484 issues across 325 flagged entries
+      <div class="ui-meta" style="margin:14px 0 18px">367 issues across 275 flagged entries
       &#8212; an entry usually carries more than one.</div>
       <div class="ui-row">
         <div class="ui-head">
@@ -825,8 +835,7 @@ footer {
         <p>A token in the URL is the whole login. No account, no sign-in screen &#8212; and
         nothing is served at all without it.</p>
         <p>The proposal states what it asks, what evidence triggered it, and what that
-        evidence is worth. <b>Lead</b> means shared subject and nothing more: 21.9%
-        precision, measured on hand-labelled pairs.</p>
+        evidence is worth &#8212; <b>lead</b> being the weaker of the two tiers.</p>
       </div>
       <div class="step-fig">
         <div class="phone">
@@ -1084,7 +1093,7 @@ any model to do it.</span></div>
               <div class="ui-bar" style="grid-template-columns:78px 1fr 32px">
                 <span>unused</span><i style="width:100%"></i><b>223</b></div>
               <div class="ui-bar" style="grid-template-columns:78px 1fr 32px">
-                <span>isolated</span><i style="width:69%"></i><b>155</b></div>
+                <span>isolated</span><i style="width:17%"></i><b>37</b></div>
               <div class="ui-bar" style="grid-template-columns:78px 1fr 32px">
                 <span>drift</span><i style="width:19%"></i><b>43</b></div>
             </div>
@@ -1100,7 +1109,7 @@ any model to do it.</span></div>
           </div></div>
         </div>
         <p class="phone-cap"><b>Quality.</b> One request per project, not per entry &#8212;
-        325 flagged entries would be 325 taps.</p>
+        275 flagged entries would be 275 taps.</p>
       </div>
 
       <div>
@@ -1139,9 +1148,9 @@ any model to do it.</span></div>
   <div class="col">
     <p class="kicker">Delegation</p>
     <h2>&#8220;Send for eval&#8221; &#8212; and the mistake inside it</h2>
-    <p>Some proposals cannot be judged from a summary on a phone. That button files a
-    self-contained request carrying <em>both entries in full</em>, so the reading needs nothing
-    but the file.</p>
+    <p>Judgement, then, and the hard half of it. Some proposals cannot be settled from a
+    summary on a phone, so that button files a self-contained request carrying <em>both
+    entries in full</em> &#8212; the reading needs nothing but the file.</p>
 
     <blockquote class="pull">
       <p>The agent is the session. There is no runner, and there must never be one.</p>
@@ -1156,12 +1165,6 @@ any model to do it.</span></div>
     everything the request contains is already in the reading agent's context. The correct
     design is that a request simply waits, and a hook surfaces it the moment any session opens
     &#8212; so the <em>noticing</em> is automated while nothing is ever spawned.</p>
-
-    <div class="note-bark">
-      <p><b>The line that decides the whole design.</b> Ask of any piece of work: is it
-      arithmetic, or is it judgement? Arithmetic must never wait on a person. Judgement
-      must never be automated.</p>
-    </div>
 
     <div class="tbl-wrap">
       <table>
@@ -1181,11 +1184,9 @@ any model to do it.</span></div>
       </table>
     </div>
 
-    <p>Getting that line wrong in either direction is expensive. Automating judgement
-    means a heuristic silently retires a rule that is still in force. Waiting on a person
-    for arithmetic means a hundred and nine trivial repairs sit in a queue for twenty
-    minutes because nobody happened to open a terminal &#8212; which is exactly what
-    happened, and what moved the mechanical half into the drain.</p>
+    <p>Both directions were got wrong here. A hundred and nine trivial repairs once sat in
+    a queue for twenty minutes because nobody happened to open a terminal, which is what
+    moved the mechanical half into the drain.</p>
 
     <h3>One repair that must never be automated</h3>
     <p>A drifted entry &#8212; one whose code has moved underneath it &#8212; can be
@@ -1321,9 +1322,18 @@ any model to do it.</span></div>
 </section>
 
 <footer class="col" style="max-width:none">
-  <p>Xylem Workbench &#183; a private review surface for context-keeper, cambium and the
-  projects they watch. Every figure on this page is a faithful recreation of the interface
-  rather than a screenshot, so no project's own memory appears here.</p>
+  <p><b>Xylem Workbench</b> &#183; a review surface for context-keeper, cambium and the projects
+  they watch. Every figure on this page is a faithful recreation of the interface rather than a
+  screenshot, so no project's own memory appears here.</p>
+  <p style="margin-top:14px">
+    <a href="https://github.com/jarmstrong158/xylem-dashboard">xylem-dashboard</a> &#183;
+    <a href="https://github.com/jarmstrong158/context-keeper">context-keeper</a> &#183;
+    <a href="https://github.com/jarmstrong158/cambium">cambium</a> &#183;
+    <a href="https://github.com/jarmstrong158/agentsync">agentsync</a>
+  </p>
+  <p style="margin-top:14px;font-size:.78rem">The suite is named after plant vascular tissue:
+  cambium is the growth layer, xylem carries material up, meristem is where growth
+  originates.</p>
 </footer>
 
 </div>
