@@ -404,6 +404,27 @@ function renderPages(snap) {
     + `<div class="section-h">All pages by project</div>${table}`;
 }
 
+/* An agent's audit of one proposal. Deliberately styled as EVIDENCE rather
+   than as an answer: the verdict word is not a status colour and there is no
+   one-tap "do what it said". It did the reading; you still rule. */
+const EVAL_VERDICT = {
+  supersedes: { label: "reads as a replacement", cls: "warn" },
+  unrelated: { label: "reads as unrelated", cls: "unknown" },
+  related: { label: "related, not a replacement", cls: "unknown" },
+  unsure: { label: "could not tell", cls: "unknown" },
+};
+
+function evalBlock(ev) {
+  const v = EVAL_VERDICT[ev.verdict] || { label: ev.verdict || "audited", cls: "unknown" };
+  const conf = ev.confidence != null ? ` · confidence ${esc(String(ev.confidence))}` : "";
+  return `<div class="evalbox">
+    <div class="evalhead">${state(v.cls, "agent read it")}
+      <b>${esc(v.label)}</b><span class="muted">${conf}${
+        ev.model ? ` · ${esc(ev.model)}` : ""}</span></div>
+    ${ev.reasoning ? `<p class="prose">${esc(ev.reasoning)}</p>` : ""}
+  </div>`;
+}
+
 /* ------------------------------------------------------------------ links */
 function renderLinks(snap) {
   const blocks = snap.projects.map((p) => {
@@ -424,6 +445,7 @@ function renderLinks(snap) {
       </div>
       ${(r.replacement_signals || []).length
         ? `<div class="meta">${esc(r.replacement_signals.join("; "))}</div>` : ""}
+      ${r.eval ? evalBlock(r.eval) : ""}
       ${r.newer_summary
         ? `<p class="prose">${esc(clamp(r.newer_summary, 130))}<br>
            <span class="muted">replacing:</span> ${esc(clamp(r.older_summary || "", 130))}</p>`
@@ -443,7 +465,8 @@ function renderLinks(snap) {
     </article>`;
     });
     return `<div class="section-h">${esc(p.name)} — ${
-      plural(l.count, "proposal", "proposals")}${l.likely ? `, ${l.likely} likely` : ""}</div>${rows.join("")}`;
+      plural(l.count, "proposal", "proposals")}${l.likely ? `, ${l.likely} likely` : ""}${
+      l.audited ? `, ${l.audited} audited` : ""}</div>${rows.join("")}`;
   }).filter(Boolean);
 
   $("#view-links").innerHTML =
@@ -451,7 +474,10 @@ function renderLinks(snap) {
       <em>Likely</em> means the newer entry names the older beside change language:
       measured 80% precision on 34 hand-labelled pairs. Everything else shares a
       subject and nothing more, which measured 21.9%. Apply the ones you agree with
-      via <code>deprecate_entry(old, reason, superseded_by=new)</code>.</div>`
+      via <code>deprecate_entry(old, reason, superseded_by=new)</code>.
+      <br><b>Send for eval</b> hands a pair to an agent on the PC, which reads both
+      entries in full and reports back here with its reasoning. It never writes to
+      a store — the ruling stays yours.</div>`
     + blocks.join("");
 }
 
@@ -565,6 +591,12 @@ async function decide(payload, btn) {
   }
 }
 
+const DECISION_LABEL = {
+  apply: "queued to apply",
+  dismiss: "queued to dismiss",
+  eval: "sent for eval",
+};
+
 function paintDecision(row, action) {
   row.dataset.pending = "";
   row.dataset.decided = action;
@@ -572,7 +604,17 @@ function paintDecision(row, action) {
   if (!box) return;
   const tag = document.createElement("span");
   tag.className = "decided";
-  tag.textContent = action === "apply" ? "queued to apply" : "queued to dismiss";
+  tag.textContent = DECISION_LABEL[action] || action;
+  // Undo flips apply <-> dismiss, which are the two sides of one ruling. An
+  // eval is not a ruling and has no opposite: the buttons come back on their
+  // own once the drain clears it, with the agent's reading attached.
+  if (action === "eval") {
+    const note = document.createElement("span");
+    note.className = "muted";
+    note.textContent = "verdict appears here after the next drain";
+    box.replaceChildren(tag, note);
+    return;
+  }
   const undo = document.createElement("button");
   undo.className = "linkish";
   undo.textContent = "undo";
@@ -637,14 +679,21 @@ function actionBar(subject, payload) {
   const decided = QUEUE.get(subject);
   if (decided) {
     return `<span class="actions">${detailsToggle()}<span class="decided">${
-      decided.action === "apply" ? "queued to apply" : "queued to dismiss"
+      esc(DECISION_LABEL[decided.action] || decided.action)
     }</span></span>`;
   }
   const p = esc(JSON.stringify(payload));
+  // "Send for eval" only makes sense for a link: it asks an agent to read both
+  // entries and say whether one really replaced the other. A law candidate has
+  // no second entry to weigh it against.
+  const evalBtn = payload.kind === "link"
+    ? `<button class="act eval" data-payload="${p}" data-eval="1">Send for eval</button>`
+    : "";
   return `<span class="actions">
     ${detailsToggle()}
     <button class="act apply" data-payload="${p}">Apply</button>
     <button class="act" data-payload="${p}" data-dismiss="1">Not this</button>
+    ${evalBtn}
   </span>`;
 }
 
@@ -652,7 +701,9 @@ document.addEventListener("click", (e) => {
   const btn = e.target.closest("button.act");
   if (!btn) return;
   const payload = JSON.parse(btn.dataset.payload);
-  payload.action = btn.dataset.dismiss ? "dismiss" : "apply";
+  payload.action = btn.dataset.eval ? "eval"
+                 : btn.dataset.dismiss ? "dismiss"
+                 : "apply";
   decide(payload, btn);
 });
 

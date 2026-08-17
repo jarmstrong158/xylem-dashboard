@@ -297,6 +297,24 @@ details.more > summary:hover { text-decoration: underline; }
   font-size: .78rem; font-weight: 600; color: var(--ink-2);
   display: inline-flex; align-items: center; gap: 6px;
 }
+
+/* ---------------------------------------------------------- agent verdict
+   Inset and rule-marked rather than tinted: this is one more piece of
+   evidence on the row, not a result banner. Giving it a status fill would
+   make the agent's reading look like the store's own state, which is exactly
+   the confusion the review gate exists to prevent. */
+.evalbox {
+  margin-top: 10px; padding: 10px 12px;
+  border-left: 2px solid var(--line-strong); border-radius: 0 var(--r-s) var(--r-s) 0;
+  background: var(--surface-2, transparent);
+}
+.evalhead {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: .8rem; color: var(--ink);
+}
+.evalhead .muted { font-weight: 400; }
+.evalbox .prose { margin-top: 7px; }
+.act.eval { border-color: var(--line-strong); color: var(--ink-2); }
 .decided::before {
   content: ""; width: 9px; height: 9px; border-radius: 50%;
   background: var(--good); display: inline-block;

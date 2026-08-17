@@ -19,3 +19,10 @@ dist/
 # The path-token credential lives in ~/.xylem-dashboard-token, never in the
 # repo. wrangler holds the deployed copy as a Worker secret.
 *.token
+
+# cambium's local knowledge store. Never tracked in ANY repo (con-004-e3b9,
+# con-017-9acb): it aggregates knowledge across every project on the machine,
+# including private ones.
+.cambium/
+
+__pycache__/

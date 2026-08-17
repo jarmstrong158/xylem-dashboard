@@ -42,41 +42,58 @@ if (Test-Path $lock) {
 }
 New-Item -ItemType File -Path $lock -Force | Out-Null
 
-try {
-  Push-Location $root
+# Both steps use exit 10 for "I changed something worth publishing". Returns
+# that code so the caller can decide ONCE, after both have run, rather than
+# deploying twice in a tick that both applied a link and wrote a verdict.
+function Run-Step($script, $banner) {
   # Not $args -- that is an automatic variable in PowerShell and assigning to it
   # is a quiet way to get an argument list that is not the one you wrote.
-  $pyArgs = @("tools\apply_queue.py")
+  $pyArgs = @($script)
   if ($DryRun) { $pyArgs += "--dry-run" }
 
+  Push-Location $root
   $out = & python @pyArgs 2>&1
   $code = $LASTEXITCODE
   Pop-Location
 
-  switch ($code) {
-    0  { if ($out -notmatch "queue is empty") { Log ($out -join " | ") } }   # quiet when idle
-    10 {
-      Log "APPLIED:"
-      $out | ForEach-Object { Log "  $_" }
-      if ($DryRun) { break }
-      Log "republishing so the phone reflects it..."
-      Push-Location $root
-      $pub = & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\publish.ps1" 2>&1
-      $pubCode = $LASTEXITCODE
-      Pop-Location
-      if ($pubCode -ne 0) {
-        # The gate check inside publish.ps1 is the entire security model. If it
-        # fails the deploy is suspect, and that must be loud rather than a line
-        # in a log nobody opens.
-        Log "PUBLISH FAILED (exit $pubCode) -- the dashboard may be stale or the gate may be broken:"
-        $pub | ForEach-Object { Log "  $_" }
-      } else {
-        Log "published."
-      }
-    }
-    default {
-      Log "drain error (exit $code):"
-      $out | ForEach-Object { Log "  $_" }
+  if ($code -eq 10) {
+    Log $banner
+    $out | ForEach-Object { Log "  $_" }
+  } elseif ($code -ne 0) {
+    Log "$script error (exit $code):"
+    $out | ForEach-Object { Log "  $_" }
+  } elseif ($out -notmatch "queue is empty|no eval requests pending") {
+    Log ($out -join " | ")   # otherwise stay quiet; most ticks do nothing
+  }
+  return $code
+}
+
+try {
+  # Every step reachable from this timer is LOCAL and FREE: read the queue,
+  # write to a store on disk, deploy static assets. Nothing here may call a
+  # billed API.
+  #
+  # An automated audit step used to live here and was deleted, not disabled.
+  # It made a metered model call per request on a five-minute timer, which is a
+  # standing charge dressed up as a feature. Sending a pair "for eval" still
+  # files a request; the reading happens in an interactive session that is
+  # already paid for. Do not reintroduce a paid call on this path.
+  $drain = Run-Step "tools\apply_queue.py" "APPLIED:"
+
+  if ($drain -eq 10 -and -not $DryRun) {
+    Log "republishing so the phone reflects it..."
+    Push-Location $root
+    $pub = & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\publish.ps1" 2>&1
+    $pubCode = $LASTEXITCODE
+    Pop-Location
+    if ($pubCode -ne 0) {
+      # The gate check inside publish.ps1 is the entire security model. If it
+      # fails the deploy is suspect, and that must be loud rather than a line
+      # in a log nobody opens.
+      Log "PUBLISH FAILED (exit $pubCode) -- the dashboard may be stale or the gate may be broken:"
+      $pub | ForEach-Object { Log "  $_" }
+    } else {
+      Log "published."
     }
   }
 } catch {

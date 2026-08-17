@@ -15,6 +15,10 @@ Two kinds of decision:
                         newer one. Exactly what deprecate_entry/record supersedes
                         would write.
             dismiss  -> recorded locally so the survey stops proposing it.
+            eval     -> files a self-contained audit request under
+                        ~/.xylem/eval-requests/pending/ and writes NOTHING else.
+                        run_evals.py picks it up, and its verdict comes back as
+                        a recommendation on the card -- the tap still rules.
 
   candidate apply    -> the entry id is added to the law's citation list, so the
                         concept tier stops reporting it as unincorporated.
@@ -205,6 +209,52 @@ def journal(rec):
     return rec
 
 
+EVAL_PENDING = os.path.join(XYLEM_HOME, "eval-requests", "pending")
+
+
+def _entry_text(project, entry_id):
+    """The whole entry, straight out of the store.
+
+    The audit prompt carries the entries VERBATIM rather than pointing an agent
+    at the store, so the eval run needs no tools, no MCP and no filesystem
+    reach. That is not a convenience: an auditor that can open the store is an
+    auditor that can change it, and this one is supposed to read and report."""
+    base = os.path.join(REPOS, project, ".context")
+    for fname in ("decisions.json", "constraints.json", "pipelines.json"):
+        path = os.path.join(base, fname)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                for e in json.load(f):
+                    if e.get("id") == entry_id:
+                        return e
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def file_eval(item, dry):
+    """Write a self-contained audit request. Touches no store."""
+    project, older, newer = item.get("project"), item.get("older"), item.get("newer")
+    a, b = _entry_text(project, newer), _entry_text(project, older)
+    if a is None or b is None:
+        missing = ", ".join(x for x, e in ((newer, a), (older, b)) if e is None)
+        return f"SKIP  eval {newer}->{older}: entry not found ({missing})", "skipped"
+    if dry:
+        return f"would file eval {newer} -> {older}  ({project})", "dry-run"
+    os.makedirs(EVAL_PENDING, exist_ok=True)
+    key = "%s:%s:%s" % (project, newer, older)
+    name = key.replace(":", "_") + ".json"
+    payload = {"key": key, "project": project, "older": older, "newer": newer,
+               "requested_at": _now(), "newer_entry": a, "older_entry": b}
+    tmp = os.path.join(EVAL_PENDING, name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, os.path.join(EVAL_PENDING, name))
+    return f"filed for eval {newer} -> {older}  ({project})", "ok"
+
+
 def apply_link(item, dry):
     """The older entry becomes superseded, pointing at the newer one."""
     import server as ck
@@ -265,6 +315,11 @@ def main():
                "queued_at": it.get("at")}
         if kind == "link" and action == "apply":
             msg, outcome = apply_link(it, dry)
+            print("  " + msg)
+            rec.update(project=it.get("project"), older=it.get("older"),
+                       newer=it.get("newer"), outcome=outcome)
+        elif kind == "link" and action == "eval":
+            msg, outcome = file_eval(it, dry)
             print("  " + msg)
             rec.update(project=it.get("project"), older=it.get("older"),
                        newer=it.get("newer"), outcome=outcome)

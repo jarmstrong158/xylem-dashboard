@@ -86,7 +86,10 @@ export default {
         const action = String(body.action || "");
         const subject = String(body.subject || "");
         if (!["link", "candidate"].includes(kind)) return json({ error: "bad kind" }, 400);
-        if (!["apply", "dismiss"].includes(action)) return json({ error: "bad action" }, 400);
+        // "eval" asks the desktop to have an agent AUDIT the pair and report
+        // back. It is still only an intent -- it authorises reading, never a
+        // write, and the ruling stays with whoever taps Apply afterwards.
+        if (!["apply", "dismiss", "eval"].includes(action)) return json({ error: "bad action" }, 400);
         if (!subject || subject.length > 200) return json({ error: "bad subject" }, 400);
         const rec = {
           kind, action, subject,
