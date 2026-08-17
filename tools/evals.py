@@ -99,13 +99,19 @@ def load_decisions():
 
 
 def save_decisions(d):
-    os.makedirs(os.path.dirname(DECISIONS), exist_ok=True)
-    tmp = DECISIONS + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(d, f, indent=2, ensure_ascii=False)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, DECISIONS)
+    """Delegate to apply_queue's merging writer.
+
+    A second blind writer on the same file reintroduces exactly the bug that
+    destroyed 24 proposals: whoever saves last wins the whole file, so a verdict
+    recorded here would erase proposals written seconds earlier by something
+    else."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_aq_save", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "apply_queue.py"))
+    aq = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(aq)
+    aq.save_decisions(d)
 
 
 def journal(rec):
@@ -209,6 +215,7 @@ def cmd_record(args):
     # The verdict IS the answer, so the request stops being outstanding.
     if args.key in dec.get("eval_pending", []):
         dec["eval_pending"].remove(args.key)
+        dec.setdefault("__removed__", []).append(("eval_pending", args.key))
     bucket = "law_evals" if is_candidate else "link_evals"
     dec.setdefault(bucket, {})
     dec[bucket][args.key] = {
@@ -251,6 +258,7 @@ def cmd_done(args):
     dec = load_decisions()
     if args.key in dec.get("eval_pending", []):
         dec["eval_pending"].remove(args.key)
+        dec.setdefault("__removed__", []).append(("eval_pending", args.key))
         save_decisions(dec)
     name = args.key.replace(":", "_") + ".json"
     src = os.path.join(PENDING, name)

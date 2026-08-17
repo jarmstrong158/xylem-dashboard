@@ -150,11 +150,60 @@ def load_decisions():
     return json.loads(json.dumps(_EMPTY_DECISIONS))
 
 
+# Deletions travel as data, not as absence. save_decisions() applies these
+# against fresh disk state.
+_REMOVED = "__removed__"
+
+
+def forget(dec, collection, item):
+    """Record an intentional removal so a merge honours it."""
+    dec.setdefault(_REMOVED, []).append((collection, item))
+
+
 def save_decisions(d):
+    """Write MERGED against whatever is on disk now, never blind.
+
+    This file has several writers: a drain run that holds it open for its whole
+    run, a session recording proposals, evals.py recording a verdict. A blind
+    overwrite means last-write-wins on the WHOLE FILE, so a writer that loaded
+    thirty seconds ago silently erases everything anyone else added meanwhile.
+
+    That is not theoretical -- 24 repair proposals were written, then destroyed
+    by a drain that had loaded before them and saved after, and the symptom was
+    "I sent them for eval, where are they". Merging per collection keeps
+    concurrent additions of DIFFERENT keys, which is the only conflict that
+    actually occurs here.
+    """
     os.makedirs(os.path.dirname(DECISIONS), exist_ok=True)
+    disk = load_decisions()
+    removals = d.pop(_REMOVED, [])
+    merged = dict(disk)
+    for key, ours in d.items():
+        theirs = disk.get(key)
+        if isinstance(ours, dict) and isinstance(theirs, dict):
+            m = dict(theirs)
+            m.update(ours)                 # add and overwrite, NEVER delete
+            merged[key] = m
+        elif isinstance(ours, list) and isinstance(theirs, list):
+            keep = list(ours)
+            for x in theirs:
+                if x not in keep:
+                    keep.append(x)         # union, never subtract
+            merged[key] = keep
+        else:
+            merged[key] = ours
+    # Deletions have to be stated, because absence cannot mean "remove": a
+    # writer that loaded ten seconds ago is missing everything added since, and
+    # treating that as intent to delete is precisely how 24 proposals vanished.
+    for coll, item in removals:
+        target = merged.get(coll)
+        if isinstance(target, dict):
+            target.pop(item, None)
+        elif isinstance(target, list) and item in target:
+            target.remove(item)
     tmp = DECISIONS + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(d, f, indent=2)
+        json.dump(merged, f, indent=2)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, DECISIONS)
@@ -175,6 +224,7 @@ def resolve_eval(dec, key):
     changed = False
     if key and key in dec.get("eval_pending", []):
         dec["eval_pending"].remove(key)
+        forget(dec, "eval_pending", key)
         changed = True
     path = os.path.join(EVAL_PENDING, (key or "").replace(":", "_") + ".json")
     if key and os.path.exists(path):
@@ -523,7 +573,7 @@ def _all_projects_with_gaps():
     return out
 
 
-def _quality_all(item, dry):
+def _quality_all(item, dec, dry):
     """Act on one actionability bucket across the whole mesh, from one tap.
 
     auto     applied here and now -- no judgement, so nothing waits on a person
@@ -557,7 +607,10 @@ def _quality_all(item, dry):
     if dry:
         return "would file %s work for %d project(s)" % (cls, len(projects)), "dry-run"
     os.makedirs(EVAL_PENDING, exist_ok=True)
-    dec = load_decisions()
+    # Mutate the caller's dict. Loading a second copy here and saving it meant
+    # main()'s older copy overwrote it at the end of the run: the request files
+    # landed on disk while eval_pending was wiped, so the app could never show
+    # anything as sent. Two writers, last-write-wins, and the wrong one won.
     dec.setdefault("eval_pending", [])
     filed = 0
     for name in projects:
@@ -578,12 +631,11 @@ def _quality_all(item, dry):
         if key not in dec["eval_pending"]:
             dec["eval_pending"].append(key)
         filed += 1
-    save_decisions(dec)
     return ("filed %s work for %d project(s); the next session picks it up"
             % (cls, filed)), "ok"
 
 
-def file_eval(item, dry):
+def file_eval(item, dec, dry):
     """Write a self-contained audit request. Touches no store.
 
     Two shapes, because the question differs. A LINK asks whether the newer
@@ -592,7 +644,7 @@ def file_eval(item, dry):
     os.makedirs(EVAL_PENDING, exist_ok=True) if not dry else None
 
     if item.get("kind") == "quality" and (item.get("subject") or "").startswith("quality-all:"):
-        return _quality_all(item, dry)
+        return _quality_all(item, dec, dry)
 
     if item.get("kind") == "quality":
         project = item.get("project")
@@ -667,11 +719,10 @@ def file_eval(item, dry):
     # The queue is cleared the moment it drains, so without this the card reverts
     # to offering "Send for eval" again and the tap looks like it did nothing --
     # which is exactly how it read after 36 of them were filed successfully.
-    dec = load_decisions()
+    # Same shared dict, same reason (see _quality_all).
     dec.setdefault("eval_pending", [])
     if key not in dec["eval_pending"]:
         dec["eval_pending"].append(key)
-        save_decisions(dec)
     return label, "ok"
 
 
@@ -750,6 +801,7 @@ def apply_repair(item, dec, dry):
     if res.get("error"):
         return f"FAILED {eid}: {res['error']}", "failed:" + str(res["error"])[:120]
     dec["repair_proposals"].pop(key, None)
+    forget(dec, "repair_proposals", key)
     return f"repaired {eid}.{field}  ({project})", "ok"
 
 
@@ -822,6 +874,7 @@ def main():
                 if not dry and key_ not in dec["repair_dismissed"]:
                     dec["repair_dismissed"].append(key_)
                     dec["repair_proposals"].pop(key_, None)
+                    forget(dec, "repair_proposals", key_)
                 msg, outcome = f"declined repair {key_}", "ok"
             else:
                 msg, outcome = apply_repair(it, dec, dry)
@@ -834,7 +887,7 @@ def main():
         elif action == "eval":
             # Both kinds route here. Must stay ABOVE the candidate branch below,
             # which handles only apply/dismiss.
-            msg, outcome = file_eval(it, dry)
+            msg, outcome = file_eval(it, dec, dry)
             print("  " + msg)
             rec.update(project=it.get("project"), older=it.get("older"),
                        newer=it.get("newer"), law=it.get("law"), outcome=outcome)

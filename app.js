@@ -691,7 +691,14 @@ function renderQuality(snap) {
     ${Object.entries(CLS_COPY).map(([k, [title, why]]) => {
       const n = cls[k];
       const subject = `quality-all:${k}`;
-      const done = QUEUE.get(subject);
+      // Two independent sources of "already sent": the in-memory queue (this
+      // session's taps, before the drain) and the snapshot (filed requests the
+      // drain has already recorded). Checking only the first meant a tap looked
+      // undone the moment the queue was cleared, which is exactly the window a
+      // refresh lands in.
+      const filed = snap.projects.some((p) =>
+        ((p.quality || {}).awaiting_classes || []).includes(k));
+      const done = QUEUE.get(subject) || (filed ? { action: "eval" } : null);
       // `waiting` has no action by construction: no edit can clear it, so a
       // button there would be a lie. Everything else gets one.
       const act = (!queueAvailable || !n || k === "waiting") ? ""
