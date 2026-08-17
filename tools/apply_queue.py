@@ -306,6 +306,74 @@ def _quality_gaps_for(project):
     return None
 
 
+def _known_ids(project):
+    ids = set()
+    base = os.path.join(REPOS, project, ".context")
+    for fn in ("decisions.json", "constraints.json", "pipelines.json"):
+        p = os.path.join(base, fn)
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                ids |= {e["id"] for e in json.load(f)}
+        except (OSError, ValueError):
+            pass
+    return ids
+
+
+def _mechanical_links(project, entry, known):
+    """The related_to ids this entry can be repaired with, or None if it cannot.
+
+    `isolated` is the one issue class that arrives with its fix computed, and
+    related_to is additive -- it retires nothing, so writing it cannot silently
+    demote a live rule the way a supersession edge could.
+
+    Returns None when the entry must be READ instead: it has no isolated issue,
+    it also carries code_drift (con-018-f4f2 -- update_entry stamps verified_at
+    unconditionally, so writing here would clear a drift flag nobody checked),
+    or none of the suggested ids resolve."""
+    types = {i.get("type") for i in entry.get("issues", [])}
+    if "isolated" not in types or "code_drift" in types:
+        return None
+    detail = next((i["detail"] for i in entry.get("issues", [])
+                   if i.get("type") == "isolated"), "")
+    if "[" not in detail:
+        return None
+    try:
+        ids = json.loads(detail[detail.index("["):].replace("'", '"'))
+    except ValueError:
+        return None
+    ids = [x for x in ids if x in known and x != entry.get("id")]
+    return ids or None
+
+
+def _repair_mechanical(project, gaps):
+    """Apply every mechanical fix now. Returns (linked, entries still needing a read).
+
+    An entry that had ONLY an isolated issue is fully repaired and drops off the
+    list; one that had isolated plus something else stays, because the something
+    else still needs prose."""
+    import server as ck
+    known = _known_ids(project)
+    pdir = os.path.join(REPOS, project)
+    linked, remaining = 0, []
+    for e in gaps:
+        ids = _mechanical_links(project, e, known)
+        if ids is None:
+            remaining.append(e)
+            continue
+        res = ck.handle_update_entry({"id": e.get("id"), "project_dir": pdir,
+                                      "updates": {"related_to": ids}})
+        if res.get("error"):
+            remaining.append(e)
+            continue
+        linked += 1
+        others = [i for i in e.get("issues", []) if i.get("type") != "isolated"]
+        if others:
+            remaining.append(dict(e, issues=others))
+    return linked, remaining
+
+
 def _law_text(law_id):
     """The law as the dashboard last published it.
 
@@ -344,13 +412,29 @@ def file_eval(item, dry):
         if not gaps:
             return f"SKIP  repair {project}: nothing flagged", "skipped"
         if dry:
-            return f"would file repair for {project} ({len(gaps)} entries)", "dry-run"
+            # Real id set, not an empty one -- passing {} would resolve nothing
+            # and report every entry as needing a read.
+            known = _known_ids(project)
+            mech = sum(1 for e in gaps
+                       if _mechanical_links(project, e, known) is not None)
+            return (f"would repair {project}: {mech} mechanical now, "
+                    f"{len(gaps) - mech} filed for reading"), "dry-run"
+
+        # Do the mechanical half HERE, not in a filed request. Applying the ids
+        # verify_quality already computed is arithmetic, and arithmetic must not
+        # wait on a person to open a session -- that was the whole complaint.
+        # Only what genuinely needs an entry READ gets filed.
+        linked, remaining = _repair_mechanical(project, gaps)
+        if not remaining:
+            return ("repaired %s: %d linked, nothing left to read"
+                    % (project, linked)), "ok"
         key = "quality:%s" % project
         payload = {"key": key, "eval_kind": "quality", "project": project,
-                   "flagged": len(gaps), "entries": gaps[:QUALITY_CAP],
-                   "capped": max(0, len(gaps) - QUALITY_CAP),
-                   "requested_at": _now()}
-        label = "filed for repair %s (%d entries)" % (project, len(gaps))
+                   "flagged": len(remaining), "entries": remaining[:QUALITY_CAP],
+                   "capped": max(0, len(remaining) - QUALITY_CAP),
+                   "auto_linked": linked, "requested_at": _now()}
+        label = ("repaired %s: %d linked automatically, %d filed for reading"
+                 % (project, linked, len(remaining)))
     elif item.get("kind") == "candidate":
         law_id, entry_id = item.get("law"), item.get("older")
         law = _law_text(law_id)
