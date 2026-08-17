@@ -91,7 +91,9 @@ export default {
         // "quality" asks for a project's flagged entries to be repaired. Like
         // "link" and "candidate" it only ever files a request; the repair is
         // done by a session agent with context-keeper's own update_entry.
-        if (!["link", "candidate", "pages", "quality"].includes(kind)) return json({ error: "bad kind" }, 400);
+        // "repair" rules on one PROPOSED edit to one entry. Same footing as a
+        // link verdict: the agent proposes the new text, the tap applies it.
+        if (!["link", "candidate", "pages", "quality", "repair"].includes(kind)) return json({ error: "bad kind" }, 400);
         // "eval" asks the desktop to have an agent AUDIT the pair and report
         // back. It is still only an intent -- it authorises reading, never a
         // write, and the ruling stays with whoever taps Apply afterwards.

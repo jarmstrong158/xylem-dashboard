@@ -469,6 +469,9 @@ const IMPLIES = {
   cite: { action: "apply", label: "Implement: cite in this law" },
   incidental: { action: "dismiss", label: "Implement: mark incidental" },
   unsure: null,
+  // A repair proposal has already been reasoned about by the time it appears,
+  // so Apply is what it points at -- but it is still only a recommendation.
+  repair: { action: "apply", label: "Implement: apply this edit" },
 };
 
 /* Bulk actions, collected during render so the buttons count exactly what is on
@@ -695,11 +698,31 @@ function renderQuality(snap) {
     const subject = `quality:${p.name}`;
     const qpayload = { kind: "quality", subject, project: p.name };
     bulkNote("quality", qpayload, null, q.awaiting_repair);
+
+    /* Proposed edits, each ruled on individually. A repair that rewrites an
+       entry's TEXT is judgement, so it gets the same treatment as a proposed
+       supersession: the change shown in full, the reasoning attached, and
+       nothing written until a tap. Repairs used to be applied directly, which
+       made this the only surface in the app with no approval step. */
+    const props = (q.repair_proposals || []).map((r) => {
+      const rp = { kind: "repair", subject: r.key, project: p.name };
+      bulkNote("quality", rp, { verdict: "repair" }, false);
+      return `<div class="row" data-subject="${esc(r.key)}" style="margin-top:9px">
+        <div class="head"><span class="title"><code>${esc(r.entry_id)}</code>
+          &middot; <span class="muted">${esc(r.field)}</span></span>
+          ${state("warn", "proposed edit")}</div>
+        ${r.why ? `<p class="prose">${esc(r.why)}</p>` : ""}
+        ${r.proposed ? `<p class="prose" style="border-left:2px solid var(--series-1);
+          padding-left:10px">${esc(clamp(String(r.proposed), 340))}</p>` : ""}
+        ${actionBar(r.key, rp)}
+      </div>`;
+    }).join("");
     return `<article class="row" data-subject="${esc(subject)}">
       <div class="head"><span class="title">${esc(p.name)}</span>
         ${state("warn", plural(q.gaps.length, "gap", "gaps"))}</div>
       ${q.drift_checked === false
         ? `<div class="meta">Drift not checked — no work tree to compare against.</div>` : ""}
+      ${props}
       ${!queueAvailable ? "" : QUEUE.get(subject)
         ? `<span class="actions"><span class="decided">queued for repair</span></span>`
         : q.awaiting_repair

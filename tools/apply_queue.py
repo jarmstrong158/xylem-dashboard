@@ -132,7 +132,8 @@ def clear_queue():
 # One place for the shape. `eval_pending` is what makes a filed-but-unjudged
 # request visible on the card; everything else is a recorded ruling.
 _EMPTY_DECISIONS = {"dismissed_links": [], "law_citations": {}, "law_dismissed": {},
-                    "link_evals": {}, "law_evals": {}, "eval_pending": []}
+                    "link_evals": {}, "law_evals": {}, "eval_pending": [],
+                    "repair_proposals": {}, "repair_dismissed": []}
 
 
 def load_decisions():
@@ -549,6 +550,30 @@ def recompile_stale(item, dry):
     return ("recompiled %d stale page(s), %d changed" % (len(rows), changed)), "ok"
 
 
+def apply_repair(item, dec, dry):
+    """Apply one proposed edit to one entry, after a human approved it.
+
+    The proposal carries the exact field and the exact new value, written when
+    an agent read the entry. Nothing is recomputed here -- the tap approved a
+    specific text, so a different text must not be what lands."""
+    key = item.get("subject") or ""
+    prop = (dec.get("repair_proposals") or {}).get(key)
+    if not prop:
+        return f"SKIP  repair {key}: no such proposal", "skipped"
+    project, eid = prop.get("project"), prop.get("entry_id")
+    field, value = prop.get("field"), prop.get("proposed")
+    if dry:
+        return f"would set {field} on {eid} ({project})", "dry-run"
+    import server as ck
+    res = ck.handle_update_entry({"id": eid,
+                                  "project_dir": os.path.join(REPOS, project),
+                                  "updates": {field: value}})
+    if res.get("error"):
+        return f"FAILED {eid}: {res['error']}", "failed:" + str(res["error"])[:120]
+    dec["repair_proposals"].pop(key, None)
+    return f"repaired {eid}.{field}  ({project})", "ok"
+
+
 def apply_link(item, dry):
     """The older entry becomes superseded, pointing at the newer one."""
     import server as ck
@@ -604,6 +629,7 @@ def main():
     applied = 0
     for it in items:
         kind, action = it.get("kind"), it.get("action")
+        key_ = it.get("subject") or ""
         rec = {"event": "apply", "kind": kind, "action": action,
                "subject": it.get("subject"), "stamp": stamp,
                "queued_at": it.get("at")}
@@ -612,6 +638,16 @@ def main():
             print("  " + msg)
             rec.update(project=it.get("project"), older=it.get("older"),
                        newer=it.get("newer"), outcome=outcome)
+        elif kind == "repair":
+            if action == "dismiss":
+                if not dry and key_ not in dec["repair_dismissed"]:
+                    dec["repair_dismissed"].append(key_)
+                    dec["repair_proposals"].pop(key_, None)
+                msg, outcome = f"declined repair {key_}", "ok"
+            else:
+                msg, outcome = apply_repair(it, dec, dry)
+            print("  " + msg)
+            rec.update(outcome=outcome, subject=key_)
         elif kind == "pages":
             msg, outcome = recompile_stale(it, dry)
             print("  " + msg)
