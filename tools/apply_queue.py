@@ -213,6 +213,70 @@ def _now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+# An issue nothing can act on. `unused` is usage telemetry -- injected often,
+# never retrieved -- and no edit clears it, so its presence must not hold a
+# request open forever.
+_UNACTIONABLE = frozenset(("unused",))
+
+
+def sweep_finished_requests(dec):
+    """Close every filed request whose work is done. Mechanical, so automatic.
+
+    A request is finished when every entry in it either has a proposal waiting
+    on a ruling, or carries only issues nothing can act on. Deciding that needs
+    no judgement -- it is a set comparison -- so it belongs here rather than in
+    a question to the user. Leaving it undone made finished work keep reading as
+    outstanding, which is indistinguishable from the system having stalled."""
+    if not os.path.isdir(EVAL_PENDING):
+        return []
+    answered = {(v.get("project"), v.get("entry_id"))
+                for v in (dec.get("repair_proposals") or {}).values()}
+    verdicts = set(dec.get("link_evals") or {}) | set(dec.get("law_evals") or {})
+    closed = []
+    for fname in sorted(os.listdir(EVAL_PENDING)):
+        if not fname.endswith(".json"):
+            continue
+        path = os.path.join(EVAL_PENDING, fname)
+        try:
+            with open(path, encoding="utf-8") as f:
+                req = json.load(f)
+        except (OSError, ValueError):
+            continue
+        key = req.get("key")
+        entries = req.get("entries")
+        if entries:
+            proj = req.get("project")
+            # The live gap list is the truth, not the proposal ledger. A
+            # proposal that was APPROVED is deleted when it applies, so judging
+            # by proposals alone marks finished work as still outstanding --
+            # exactly the state that made the app look stalled. An entry counts
+            # as handled when it no longer carries an actionable issue, or has a
+            # proposal waiting on a ruling.
+            still = {}
+            for g in (_quality_gaps_for(proj) or []):
+                t = {i.get("type") for i in g.get("issues", [])} - _UNACTIONABLE
+                if t:
+                    still[g.get("id")] = t
+            done = all(
+                e.get("id") not in still or (proj, e.get("id")) in answered
+                for e in entries)
+        else:
+            # a link or candidate request: finished once a verdict exists
+            done = key in verdicts
+        if not done:
+            continue
+        os.makedirs(EVAL_DONE, exist_ok=True)
+        try:
+            shutil.move(path, os.path.join(EVAL_DONE, fname))
+        except OSError:
+            continue
+        if key in dec.get("eval_pending", []):
+            dec["eval_pending"].remove(key)
+            forget(dec, "eval_pending", key)
+        closed.append(key)
+    return closed
+
+
 def resolve_eval(dec, key):
     """A ruling ends the question, so retire any eval request for it.
 
@@ -831,6 +895,18 @@ def main():
         print("could not reach the queue:", e)
         return 1
     if not items:
+        # Still sweep. Requests are answered BETWEEN drains -- a session writes
+        # proposals while the queue is empty -- so gating the sweep on inbound
+        # taps means finished work waits for unrelated activity to retire it.
+        dec = load_decisions()
+        swept = sweep_finished_requests(dec)
+        if swept:
+            save_decisions(dec)
+            print("closed %d finished request(s): %s"
+                  % (len(swept), ", ".join(swept[:4])
+                     + ("..." if len(swept) > 4 else "")))
+            journal({"event": "sweep", "closed": swept})
+            return 10                    # republish so the app reflects it
         print("queue is empty — nothing decided on the phone since last run.")
         return 0
 
@@ -925,6 +1001,17 @@ def main():
     if dry:
         print("\nnothing written. Re-run without --dry-run to apply.")
         return 0
+
+    # Retire requests whose work is finished, every run. Nobody should have to
+    # ask for this: it is a set comparison, and skipping it left completed work
+    # reading as outstanding.
+    swept = sweep_finished_requests(dec)
+    if swept:
+        print("  closed %d finished request(s): %s"
+              % (len(swept), ", ".join(swept[:4])
+                 + ("..." if len(swept) > 4 else "")))
+        journal({"event": "sweep", "closed": swept, "stamp": stamp})
+        applied += len(swept)
 
     save_decisions(dec)
     cleared = clear_queue()
