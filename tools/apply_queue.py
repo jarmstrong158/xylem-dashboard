@@ -24,10 +24,29 @@ Two kinds of decision:
 Dismissals live in .cambium/decisions.json next to the other derived stores.
 They are a record of judgement, not a cache: a dismissed pair stays dismissed
 until you say otherwise, which is the whole point of having decided it once.
+
+SAFE TO RUN UNATTENDED, which is a stronger claim than "works" and is what the
+backup and the journal buy:
+
+  ~/.xylem/queue-backups/<stamp>/<project>/*.json   every affected store, copied
+                                                    before the first write
+  ~/.xylem/apply-journal.jsonl                      append-only, one line per
+                                                    action, never rewritten
+
+Both sit outside every repo on purpose (see BACKUPS). The review gate is still
+the tap on the phone -- a human read both entries and ruled on the pair. What
+changes when this runs on a timer is only that the token alone now reaches the
+stores, with nobody at the keyboard to notice a bad edge. The backup is what
+makes that recoverable and the journal is what makes it visible.
+
+EXIT CODES:  0 nothing applied   10 applied (caller should republish)   1 error
 """
 
+import datetime
+import glob
 import json
 import os
+import shutil
 import sys
 import urllib.request
 
@@ -37,7 +56,28 @@ CAMBIUM = os.path.join(REPOS, "cambium")
 DECISIONS = os.path.join(CAMBIUM, ".cambium", "decisions.json")
 BASE = "https://xylem-dashboard.jarmstrong158.workers.dev"
 
+# Backups and the journal live OUTSIDE every repo, deliberately.
+#
+# A backup is a verbatim copy of some other project's store, and this repo is
+# the one that publishes. Writing them under xylem-dashboard/ would put
+# cross-project store content on a git path and make the allowlist in
+# build_dist.py the only thing standing between it and a deploy. ~/.xylem is
+# already the machine's non-repo Xylem state (the session pointer lives there),
+# so it keeps that content off every git path at once (con-015-12da).
+XYLEM_HOME = os.path.join(os.path.expanduser("~"), ".xylem")
+BACKUPS = os.path.join(XYLEM_HOME, "queue-backups")
+JOURNAL = os.path.join(XYLEM_HOME, "apply-journal.jsonl")
+
 sys.path.insert(0, os.path.join(REPOS, "context-keeper"))
+
+# Unattended, stdout is a redirected pipe, and on Windows that means cp1252 --
+# where a single em-dash in a print raises UnicodeEncodeError and takes the
+# whole drain down. It cost nothing to hit interactively, because a console
+# that can render it never complained.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):
+    pass
 
 
 def token():
@@ -93,22 +133,94 @@ def save_decisions(d):
     os.replace(tmp, DECISIONS)
 
 
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _stamp():
+    return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def backup_store(project, stamp):
+    """Copy a project's entry files before anything writes to them.
+
+    12 of the 20 stores on this machine are NOT tracked in git, so for most
+    projects a bad write has no undo at all. Run by hand that was survivable:
+    the output is on screen, and a wrong supersession is obvious and fixable
+    while you still remember what you meant. On a timer nobody is watching, and
+    the first sign of a bad edge is a rule that quietly stopped being served.
+
+    So the copy is the price of unattending it. It is a few hundred KB and it
+    turns every auto-apply back into something reversible."""
+    src = os.path.join(REPOS, project, ".context")
+    if not os.path.isdir(src):
+        return None
+    dst = os.path.join(BACKUPS, stamp, project)
+    os.makedirs(dst, exist_ok=True)
+    n = 0
+    for path in glob.glob(os.path.join(src, "*.json")):
+        shutil.copy2(path, os.path.join(dst, os.path.basename(path)))
+        n += 1
+    return {"project": project, "files": n, "path": dst} if n else None
+
+
+def backup_decisions(stamp):
+    """The dismissals file is a record of judgement, not a cache -- losing it
+    means every pair you already said no to comes back and asks again."""
+    if not os.path.exists(DECISIONS):
+        return None
+    dst = os.path.join(BACKUPS, stamp, "_cambium")
+    os.makedirs(dst, exist_ok=True)
+    shutil.copy2(DECISIONS, os.path.join(dst, "decisions.json"))
+    return {"project": "_cambium", "files": 1, "path": dst}
+
+
+def prune_backups(keep=40):
+    """Bounded history. A drain on a two-minute timer would otherwise fill the
+    disk with snapshots of a store nobody changed."""
+    try:
+        dirs = sorted(d for d in os.listdir(BACKUPS)
+                      if os.path.isdir(os.path.join(BACKUPS, d)))
+    except OSError:
+        return
+    for old in dirs[:-keep]:
+        shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
+
+
+def journal(rec):
+    """Append-only record of what was applied while nobody was looking.
+
+    stdout was enough when a human ran this and read the result. Scheduled, it
+    goes to a pipe and vanishes, so the store changes and nothing anywhere says
+    what changed it. One JSON object per line, never rewritten -- if a bad edge
+    turns up weeks later this is what says when it landed and which backup
+    predates it."""
+    rec = dict(rec, at=_now())
+    os.makedirs(XYLEM_HOME, exist_ok=True)
+    try:
+        with open(JOURNAL, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print("  (journal write failed: %s)" % e)
+    return rec
+
+
 def apply_link(item, dry):
     """The older entry becomes superseded, pointing at the newer one."""
     import server as ck
     project, older, newer = item["project"], item["older"], item["newer"]
     base_dir = os.path.join(REPOS, project, ".context")
     if not os.path.isdir(base_dir):
-        return f"SKIP  {project}: no .context store"
+        return f"SKIP  {project}: no .context store", "skipped"
     if dry:
-        return f"would supersede {older} -> {newer}  ({project})"
+        return f"would supersede {older} -> {newer}  ({project})", "dry-run"
     res = ck.handle_update_entry({
         "id": older, "project_dir": os.path.dirname(base_dir),
         "updates": {"status": "superseded", "superseded_by": newer},
     })
     if res.get("error"):
-        return f"FAILED {older}: {res['error']}"
-    return f"superseded {older} -> {newer}  ({project})"
+        return f"FAILED {older}: {res['error']}", "failed:" + str(res["error"])[:120]
+    return f"superseded {older} -> {newer}  ({project})", "ok"
 
 
 def main():
@@ -123,18 +235,47 @@ def main():
         return 0
 
     dec = load_decisions()
+    items = sorted(items, key=lambda x: x.get("at", ""))
     print("%d queued decision(s)%s\n" % (len(items), " (DRY RUN)" if dry else ""))
+
+    # Back up BEFORE the first write, and back up every affected store at once.
+    # Per-item backups would leave a run that dies halfway recoverable only to
+    # some midpoint nobody chose; this restores to exactly where the drain
+    # started.
+    stamp = _stamp()
+    if not dry:
+        targets = {it.get("project") for it in items
+                   if it.get("kind") == "link" and it.get("action") == "apply"}
+        backed = [b for b in (backup_store(p, stamp)
+                              for p in sorted(t for t in targets if t)) if b]
+        d = backup_decisions(stamp)
+        if d:
+            backed.append(d)
+        if backed:
+            print("  snapshot: %s (%d store(s))\n"
+                  % (os.path.join(BACKUPS, stamp), len(backed)))
+            journal({"event": "backup", "stamp": stamp,
+                     "stores": [b["project"] for b in backed]})
+
     applied = 0
-    for it in sorted(items, key=lambda x: x.get("at", "")):
+    for it in items:
         kind, action = it.get("kind"), it.get("action")
+        rec = {"event": "apply", "kind": kind, "action": action,
+               "subject": it.get("subject"), "stamp": stamp,
+               "queued_at": it.get("at")}
         if kind == "link" and action == "apply":
-            print("  " + apply_link(it, dry))
+            msg, outcome = apply_link(it, dry)
+            print("  " + msg)
+            rec.update(project=it.get("project"), older=it.get("older"),
+                       newer=it.get("newer"), outcome=outcome)
         elif kind == "link" and action == "dismiss":
             key = "%s:%s:%s" % (it.get("project"), it.get("newer"), it.get("older"))
             if not dry and key not in dec["dismissed_links"]:
                 dec["dismissed_links"].append(key)
             print("  dismissed link %s -> %s (%s)"
                   % (it.get("newer"), it.get("older"), it.get("project")))
+            rec.update(project=it.get("project"), older=it.get("older"),
+                       newer=it.get("newer"), outcome="dry-run" if dry else "ok")
         elif kind == "candidate":
             law, entry = it.get("law"), it.get("older")
             bucket = "law_citations" if action == "apply" else "law_dismissed"
@@ -144,9 +285,14 @@ def main():
                     dec[bucket][law].append(entry)
             print("  %s %s for %s" % (
                 "cite" if action == "apply" else "not relevant:", entry, law))
+            rec.update(law=law, entry=entry, bucket=bucket,
+                       outcome="dry-run" if dry else "ok")
         else:
             print("  SKIP unknown decision:", it)
+            journal(dict(rec, outcome="skipped-unknown"))
             continue
+        if not dry:
+            journal(rec)
         applied += 1
 
     if dry:
@@ -155,9 +301,17 @@ def main():
 
     save_decisions(dec)
     cleared = clear_queue()
+    prune_backups()
     print("\napplied %d, queue cleared (%d keys)." % (applied, cleared.get("cleared", 0)))
-    print("Run publish.ps1 to rebuild the snapshot so the phone reflects it.")
-    return 0
+    print("journal:  %s" % JOURNAL)
+    print("restore:  copy %s\\<project>\\*.json back over that project's .context\\"
+          % os.path.join(BACKUPS, stamp))
+    journal({"event": "drain", "stamp": stamp, "applied": applied,
+             "cleared": cleared.get("cleared", 0)})
+    # 10, not 0: the caller republishes only when something actually changed.
+    # wrangler deploy plus the gate check is ~45s, and a drain on a two-minute
+    # timer is empty almost every time it runs.
+    return 10 if applied else 0
 
 
 if __name__ == "__main__":
