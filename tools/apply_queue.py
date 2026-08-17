@@ -737,9 +737,16 @@ def apply_repair(item, dec, dry):
     if dry:
         return f"would set {field} on {eid} ({project})", "dry-run"
     import server as ck
+    # __reverify is the resolution for code_drift: an agent read the entry
+    # against the code that moved and found it still accurate. update_entry
+    # stamps verified_at and verified_sha on any write, so an empty update is
+    # exactly "re-verified, nothing changed" -- and it only ever happens after a
+    # human approves the reasoning on the card, which is what makes it a ruling
+    # rather than the silent flag-clear con-018-f4f2 forbids.
+    updates = {} if field == "__reverify" else {field: value}
     res = ck.handle_update_entry({"id": eid,
                                   "project_dir": os.path.join(REPOS, project),
-                                  "updates": {field: value}})
+                                  "updates": updates})
     if res.get("error"):
         return f"FAILED {eid}: {res['error']}", "failed:" + str(res["error"])[:120]
     dec["repair_proposals"].pop(key, None)

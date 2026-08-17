@@ -760,11 +760,14 @@ function renderQuality(snap) {
       bulkNote("quality", rp, { verdict: "repair" }, false);
       return `<div class="row" data-subject="${esc(r.key)}" style="margin-top:9px">
         <div class="head"><span class="title"><code>${esc(r.entry_id)}</code>
-          &middot; <span class="muted">${esc(r.field)}</span></span>
-          ${state("warn", "proposed edit")}</div>
+          &middot; <span class="muted">${esc(
+            r.field === "__reverify" ? "re-verify" : r.field)}</span></span>
+          ${state(r.field === "__reverify" ? "good" : "warn",
+                  r.field === "__reverify" ? "read, still accurate" : "proposed edit")}</div>
         ${r.why ? `<p class="prose">${esc(r.why)}</p>` : ""}
-        ${r.proposed ? `<p class="prose" style="border-left:2px solid var(--series-1);
-          padding-left:10px">${esc(clamp(String(r.proposed), 340))}</p>` : ""}
+        ${r.proposed && r.field !== "__reverify"
+          ? `<p class="prose" style="border-left:2px solid var(--series-1);
+             padding-left:10px">${esc(clamp(String(r.proposed), 340))}</p>` : ""}
         ${actionBar(r.key, rp)}
       </div>`;
     }).join("");
