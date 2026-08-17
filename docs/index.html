@@ -1,0 +1,1331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Xylem Workbench</title>
+<meta name="description" content="An illustrated walkthrough of the Xylem workbench: the three memory tiers, all six views, and the phone-to-desktop review loop, screen by screen.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2213%22 font-size=%2213%22>&#127807;</text></svg>">
+<style>
+/* ============================================================ tokens
+   Light is the base. Dark is redefined at token level only, three times over:
+   media query (guarded), and both explicit stamps. No component ever declares
+   a colour outside this block. */
+:root {
+  --ground:      #EDEFEA;
+  --paper:       #F6F7F3;
+  --paper-2:     #E4E8DE;
+  --ink:         #121714;
+  --ink-2:       #454E47;
+  --ink-3:       #5C6459;   /* captions are 12.8px = normal text, so this must clear 4.5:1 */
+  --rule:        #C9CEC4;
+  --rule-soft:   #DCE0D6;
+  --sap:         #2E6B4E;
+  --sap-soft:    #DCE9E0;
+  --bark:        #6B5540;
+  --bark-soft:   #EAE1D6;
+  --phone-bezel: #C6CCC2;
+
+  /* the product's own tokens, used ONLY inside .ui mocks */
+  --ui-surface:  #FFFFFF;
+  --ui-ground:   #F4F4F1;
+  --ui-ink:      #1a1a18;
+  --ui-ink2:     #52514e;
+  --ui-line:     #e1e0d9;
+  --ui-line-2:   #c3c2b7;
+  --ui-blue:     #2a78d6;
+  /* The filled "recommended" button flips BOTH background and text per theme.
+     White-on-accent measures 4.42:1 light and 3.64:1 dark -- under the floor in
+     both, which is how a primary control ends up the least legible thing on the
+     card. */
+  --ui-rec-bg:   #1F5DAB;
+  --ui-rec-fg:   #FFFFFF;
+  --ui-amber:    #fab219;
+  --ui-green:    #0ca30c;
+  --ui-red:      #d03b3b;
+
+  --measure: 66ch;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: ui-sans-serif, "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:    #0E120F;
+    --paper:     #151A16;
+    --paper-2:   #1D241E;
+    --ink:       #E4E8DF;
+    --ink-2:     #AFB8AC;
+    --ink-3:     #838C81;
+    --rule:      #2C332D;
+    --rule-soft: #222922;
+    --sap:       #79C79A;
+    --sap-soft:  #17301F;
+    --bark:      #C0A183;
+    --bark-soft: #2A231C;
+  --phone-bezel: #343B35;
+    --phone-bezel: #343B35;
+
+    --ui-surface: #1b1b19;
+    --ui-ground:  #121211;
+    --ui-ink:     #eceae2;
+    --ui-ink2:    #c3c2b7;
+    --ui-line:    #2c2c2a;
+    --ui-line-2:  #383835;
+    --ui-rec-bg:  #6FB2F5;
+    --ui-rec-fg:  #0E120F;
+    --ui-blue:    #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:    #0E120F;
+  --paper:     #151A16;
+  --paper-2:   #1D241E;
+  --ink:       #E4E8DF;
+  --ink-2:     #AFB8AC;
+  --ink-3:     #838C81;
+  --rule:      #2C332D;
+  --rule-soft: #222922;
+  --sap:       #79C79A;
+  --sap-soft:  #17301F;
+  --bark:      #C0A183;
+  --bark-soft: #2A231C;
+
+  --ui-surface: #1b1b19;
+  --ui-ground:  #121211;
+  --ui-ink:     #eceae2;
+  --ui-ink2:    #c3c2b7;
+  --ui-line:    #2c2c2a;
+  --ui-line-2:  #383835;
+  --ui-rec-bg:  #6FB2F5;
+  --ui-rec-fg:  #0E120F;
+  --ui-blue:    #3987e5;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px 120px; }
+.col  { max-width: var(--measure); }
+
+/* ------------------------------------------------------------- masthead */
+.masthead {
+  padding: 76px 0 40px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 8px;
+}
+.eyebrow {
+  font-family: var(--sans);
+  font-size: .72rem; font-weight: 650; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--sap);
+  margin: 0 0 18px;
+}
+h1 {
+  font-size: clamp(2.6rem, 6vw, 4rem);
+  line-height: 1.02; margin: 0 0 22px;
+  font-weight: 600; letter-spacing: -.018em;
+  text-wrap: balance;
+}
+.standfirst {
+  font-size: 1.22rem; line-height: 1.55; color: var(--ink-2);
+  max-width: 56ch; margin: 0;
+}
+.standfirst em { color: var(--ink); font-style: italic; }
+
+/* the one flourish: a vascular cross-section, drawn not decorated */
+.hero-figure {
+  display: grid; grid-template-columns: 1fr; gap: 28px;
+  align-items: center; margin-top: 44px;
+}
+@media (min-width: 860px) { .hero-figure { grid-template-columns: 1fr 320px; } }
+.rings { width: 100%; height: auto; }
+
+/* ------------------------------------------------------------ structure */
+section { padding-top: 64px; }
+h2 {
+  font-size: clamp(1.6rem, 3.2vw, 2.1rem); line-height: 1.14;
+  margin: 0 0 8px; font-weight: 600; letter-spacing: -.012em;
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--sans);
+  font-size: .95rem; font-weight: 680; letter-spacing: .01em;
+  margin: 40px 0 10px; color: var(--ink);
+}
+.kicker {
+  font-family: var(--sans); font-size: .72rem; font-weight: 650;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-3); margin: 0 0 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.kicker::after {
+  content: ""; flex: 1; height: 1px; background: var(--rule-soft);
+}
+p { margin: 0 0 18px; }
+a { color: var(--sap); text-underline-offset: 3px; }
+strong { font-weight: 650; }
+code, .m { font-family: var(--mono); font-size: .84em; }
+p code, li code, td code {
+  background: var(--paper-2); padding: .1em .35em; border-radius: 3px;
+}
+
+/* --------------------------------------------------------------- pieces */
+.lede {
+  font-size: 1.1rem; color: var(--ink-2); max-width: 58ch;
+  margin: 0 0 26px;
+}
+.stats {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px;
+  background: var(--rule-soft); border: 1px solid var(--rule-soft);
+  margin: 36px 0 0;
+}
+@media (min-width: 700px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+.stat { background: var(--ground); padding: 18px 16px; }
+.stat b {
+  display: block; font-size: 1.9rem; line-height: 1; font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.stat span {
+  display: block; font-family: var(--sans); font-size: .72rem;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+  margin-top: 8px;
+}
+
+blockquote.pull {
+  margin: 34px 0; padding: 20px 24px;
+  border-left: 2px solid var(--sap);
+  background: var(--sap-soft);
+  font-size: 1.06rem; font-style: italic; color: var(--ink);
+  max-width: 60ch;
+}
+blockquote.pull p:last-child { margin-bottom: 0; }
+
+.note-bark {
+  margin: 30px 0; padding: 18px 22px;
+  border-left: 2px solid var(--bark); background: var(--bark-soft);
+  font-size: .96rem; max-width: 62ch;
+}
+.note-bark p:last-child { margin-bottom: 0; }
+.note-bark b { color: var(--bark); }
+
+/* figure plates */
+figure {
+  margin: 34px 0 10px; padding: 0;
+}
+figure.bleed { max-width: none; }
+figcaption {
+  font-family: var(--sans); font-size: .8rem; line-height: 1.5;
+  color: var(--ink-3); margin-top: 12px; max-width: 62ch;
+}
+figcaption b { color: var(--ink-2); font-weight: 650; }
+
+/* tables */
+.tbl-wrap { overflow-x: auto; margin: 26px 0; }
+table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: .86rem; }
+th, td {
+  text-align: left; padding: 9px 14px 9px 0;
+  border-bottom: 1px solid var(--rule-soft); vertical-align: top;
+}
+th {
+  font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 650; white-space: nowrap;
+}
+td.n { text-align: right; font-variant-numeric: tabular-nums; padding-right: 22px; }
+
+ul.plain { margin: 0 0 20px; padding-left: 20px; }
+ul.plain li { margin-bottom: 9px; }
+
+/* numbered workflow -- a real sequence, so it is numbered */
+.steps { counter-reset: step; margin: 30px 0 0; }
+.step {
+  counter-increment: step;
+  display: grid; grid-template-columns: 40px 1fr; gap: 18px;
+  padding: 24px 0; border-top: 1px solid var(--rule-soft);
+}
+.step::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--sans); font-size: .8rem; font-weight: 680;
+  color: var(--sap); letter-spacing: .04em; padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.step h4 {
+  margin: 0 0 6px; font-family: var(--sans); font-size: .98rem; font-weight: 680;
+}
+.step p { margin: 0 0 12px; font-size: .97rem; color: var(--ink-2); max-width: 58ch; }
+.step p:last-child { margin-bottom: 0; }
+.step .free {
+  display: inline-block; font-family: var(--sans); font-size: .68rem;
+  font-weight: 680; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--sap); border: 1px solid var(--sap); border-radius: 999px;
+  padding: 2px 9px; margin-left: 8px; vertical-align: 2px;
+}
+
+/* gates */
+.gates { display: grid; gap: 1px; background: var(--rule-soft);
+         border: 1px solid var(--rule-soft); margin: 30px 0; }
+@media (min-width: 760px) { .gates { grid-template-columns: repeat(2, 1fr); } }
+.gate { background: var(--ground); padding: 20px 22px; }
+.gate h4 {
+  margin: 0 0 8px; font-family: var(--sans); font-size: .9rem; font-weight: 680;
+  display: flex; align-items: baseline; gap: 9px;
+}
+.gate h4 span {
+  font-size: .68rem; letter-spacing: .1em; color: var(--sap);
+  font-variant-numeric: tabular-nums;
+}
+.gate p { margin: 0; font-size: .92rem; color: var(--ink-2); }
+
+pre {
+  font-family: var(--mono); font-size: .8rem; line-height: 1.6;
+  background: var(--paper); color: var(--ink-2);
+  border: 1px solid var(--rule-soft); border-radius: 4px;
+  padding: 16px 18px; overflow-x: auto; margin: 22px 0;
+}
+
+/* =================================================== the product mockups
+   Scoped to .ui so the app's own visual language (blue accent, amber
+   pending, hairline cards) stays separate from the page around it: plate
+   and specimen should not be confusable. */
+.ui {
+  font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  background: var(--ui-ground); color: var(--ui-ink);
+  border: 1px solid var(--rule); border-radius: 8px;
+  padding: 18px; overflow-x: auto;
+}
+.ui-chrome {
+  display: flex; align-items: center; gap: 8px;
+  padding-bottom: 14px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--ui-line);
+}
+.ui-tab {
+  font-size: .78rem; padding: 5px 11px; border-radius: 999px;
+  color: var(--ui-ink2); white-space: nowrap;
+}
+.ui-tab.on { background: var(--ui-surface); color: var(--ui-ink); font-weight: 650;
+             border: 1px solid var(--ui-line); }
+.ui-row {
+  background: var(--ui-surface); border: 1px solid var(--ui-line);
+  border-radius: 10px; padding: 14px 16px; margin-bottom: 9px;
+}
+.ui-row:last-child { margin-bottom: 0; }
+.ui-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ui-title { font-weight: 620; font-size: .92rem; }
+.ui code { font-family: var(--mono); font-size: .82em;
+           background: var(--ui-ground); padding: .08em .3em; border-radius: 3px; }
+.ui-state {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .74rem; color: var(--ui-ink2); white-space: nowrap;
+}
+.ui-dot { display: block; width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.d-warn { background: var(--ui-amber); }
+.d-good { background: var(--ui-green); }
+.d-unk  { background: var(--ui-line-2); }
+.d-bad  { background: var(--ui-red); }
+.ui-meta { font-size: .78rem; color: var(--ui-ink2); margin-top: 7px; }
+.ui-prose { font-size: .84rem; color: var(--ui-ink2); margin: 9px 0 0; line-height: 1.6; }
+.ui-seen { margin-top: 9px; font-size: .76rem; color: var(--ui-ink2); }
+
+.ui-actions {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px;
+}
+.ui-btn {
+  min-height: 34px; padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--ui-line); background: var(--ui-surface);
+  color: var(--ui-ink); font: 600 .8rem/1 var(--sans); white-space: nowrap;
+}
+.ui-btn.primary { border-color: var(--ui-blue); color: var(--ui-blue); }
+.ui-btn.rec {
+  background: var(--ui-rec-bg); border-color: var(--ui-rec-bg);
+  color: var(--ui-rec-fg); font-weight: 650;
+}
+.ui-rec-tag {
+  font-size: .68rem; font-weight: 680; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ui-blue);
+}
+.ui-await {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .72rem; font-weight: 650; letter-spacing: .02em;
+  color: var(--ui-ink); background: rgba(250,178,25,.18);
+  border: 1px solid rgba(250,178,25,.55); border-radius: 999px; padding: 4px 10px;
+}
+.ui-await::before {
+  content: ""; display: block; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--ui-amber); flex: none;
+}
+.ui-eval {
+  margin-top: 11px; padding: 11px 13px;
+  border-left: 2px solid var(--ui-line-2); border-radius: 0 6px 6px 0;
+}
+.ui-evalhead {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .82rem;
+}
+.ui-bulkbar {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 14px; padding: 12px 14px;
+  background: var(--ui-surface); border: 1px solid var(--ui-line); border-radius: 10px;
+}
+.ui-sect {
+  font-size: .72rem; font-weight: 680; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ui-ink2); margin: 18px 0 9px;
+}
+.ui-sect:first-child { margin-top: 0; }
+.ui-cand {
+  border: 1px solid var(--ui-line); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px; background: var(--ui-ground);
+}
+.ui-law { display: grid; gap: 20px; }
+@media (min-width: 720px) { .ui-law { grid-template-columns: 1fr 300px; } }
+.ui-aside { border-left: 1px solid var(--ui-line); padding-left: 18px; }
+@media (max-width: 719px) { .ui-aside { border-left: 0; padding-left: 0; } }
+.ui-tbl { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: 10px; }
+.ui-tbl th, .ui-tbl td {
+  text-align: left; padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--ui-line); color: var(--ui-ink2);
+}
+.ui-tbl th { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.ui-bars { display: grid; gap: 7px; margin-top: 12px; }
+.ui-bar { display: grid; grid-template-columns: 130px 1fr 42px; gap: 10px; align-items: center;
+          font-size: .78rem; color: var(--ui-ink2); }
+.ui-bar i { display: block; height: 9px; border-radius: 2px; background: var(--ui-blue); }
+.ui-bar b { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+
+/* ------------------------------------------------------ phone specimens
+   The product is used one-handed on a phone; showing it only at desk width
+   would be showing the wrong artifact. Frames are drawn at true 320px content
+   width so the wrapping is honest rather than simulated. */
+.phone-row {
+  display: flex; gap: 22px; overflow-x: auto; padding: 4px 4px 18px;
+  scroll-snap-type: x proximity;
+}
+.phone-row::-webkit-scrollbar { height: 8px; }
+.phone-row::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+.phone {
+  flex: none; width: 320px; scroll-snap-align: start;
+  border: 9px solid var(--phone-bezel); border-radius: 34px;
+  background: var(--ui-ground); overflow: hidden;
+  box-shadow: 0 2px 18px rgba(0,0,0,.14);
+}
+.phone-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px 6px; font-family: var(--sans); font-size: .68rem;
+  color: var(--ui-ink2); background: var(--ui-ground);
+}
+.phone-bar b { font-weight: 620; color: var(--ui-ink); font-variant-numeric: tabular-nums; }
+.phone-screen { padding: 10px 12px 18px; }
+.phone .ui { border: 0; border-radius: 0; padding: 0; background: transparent; }
+.phone .ui-row, .phone .ui-cand { border-radius: 9px; }
+.phone .ui-title { font-size: .85rem; }
+.phone .ui-prose { font-size: .79rem; }
+.phone .ui-btn { min-height: 36px; padding: 8px 13px; font-size: .78rem; }
+.phone-cap {
+  font-family: var(--sans); font-size: .76rem; color: var(--ink-3);
+  margin: 10px 2px 0; max-width: 320px;
+}
+.phone-cap b { color: var(--ink-2); font-weight: 650; }
+
+/* desktop half of the loop, so the two sides are visibly different machines */
+.term {
+  /* A div collapses whitespace, so terminal output rendered as one wrapped
+     paragraph. pre-wrap keeps the line breaks AND still wraps long lines
+     inside a 342px column, which <pre> alone would not. */
+  white-space: pre-wrap;
+  font-family: var(--mono); font-size: .76rem; line-height: 1.62;
+  background: var(--paper); color: var(--ink-2);
+  border: 1px solid var(--rule); border-radius: 8px;
+  padding: 14px 16px; overflow-x: auto;
+}
+.term .ok { color: var(--sap); }
+.term .dim { color: var(--ink-3); }
+
+.step-fig { margin-top: 16px; }
+@media (min-width: 980px) {
+  .step { grid-template-columns: 40px minmax(0,1fr) 342px; }
+  .step-fig { margin-top: 0; }
+}
+
+footer {
+  margin-top: 96px; padding-top: 28px; border-top: 1px solid var(--rule);
+  font-family: var(--sans); font-size: .82rem; color: var(--ink-3);
+}
+:focus-visible { outline: 2px solid var(--sap); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">A review surface for machine memory</p>
+  <h1>The Xylem Workbench</h1>
+  <p class="standfirst">Twenty projects' worth of recorded decisions, constraints and
+  gotchas &#8212; compiled, checked for rot, and reduced to <em>the handful of judgement calls
+  that actually need a person</em>, delivered to a phone.</p>
+
+  <div class="hero-figure">
+    <div>
+      <p style="margin:0;color:var(--ink-2);font-size:1.02rem;max-width:52ch">
+      The suite is named after plant vascular tissue. <b>Cambium</b> is the growth layer
+      that produces new tissue; <b>xylem</b> is what carries material up through the plant;
+      <b>meristem</b> is where growth originates. The naming is not decoration &#8212; it
+      describes the architecture. Entries are laid down like growth rings, pages are
+      compiled from them, and laws are the few things worth carrying everywhere.</p>
+    </div>
+    <svg class="rings" viewBox="0 0 320 320" role="img" aria-label="Concentric rings: entries at the outside, pages compiled from them, laws at the core">
+      <defs>
+        <radialGradient id="core">
+          <stop offset="0%" stop-color="var(--sap)" stop-opacity=".9"/>
+          <stop offset="100%" stop-color="var(--sap)" stop-opacity=".35"/>
+        </radialGradient>
+      </defs>
+      <g fill="none" stroke="var(--rule)" stroke-width="1">
+        <circle cx="160" cy="160" r="150"/><circle cx="160" cy="160" r="138"/>
+        <circle cx="160" cy="160" r="127"/><circle cx="160" cy="160" r="112"/>
+        <circle cx="160" cy="160" r="99"/>
+      </g>
+      <g fill="none" stroke="var(--bark)" stroke-width="1.4" opacity=".85">
+        <circle cx="160" cy="160" r="82"/><circle cx="160" cy="160" r="70"/>
+        <circle cx="160" cy="160" r="59"/>
+      </g>
+      <circle cx="160" cy="160" r="34" fill="url(#core)" stroke="var(--sap)" stroke-width="1.5"/>
+      <g font-family="ui-sans-serif, system-ui" font-size="10" fill="var(--ink-3)"
+         letter-spacing="1.2" text-anchor="middle">
+        <text x="160" y="24">ENTRIES</text>
+        <text x="160" y="96">PAGES</text>
+        <text x="160" y="163" fill="var(--ink)" font-weight="700">LAWS</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>20</b><span>Projects</span></div>
+    <div class="stat"><b>432</b><span>Entries</span></div>
+    <div class="stat"><b>427</b><span>Compiled pages</span></div>
+    <div class="stat"><b>19</b><span>Cross-project laws</span></div>
+  </div>
+</header>
+
+<section class="col">
+  <p class="kicker">The problem</p>
+  <h2>A memory that only grows is a memory nobody reads</h2>
+  <p class="lede">Recording decisions is the easy half. The hard half is that a store
+  ages: code moves under an entry, one decision quietly replaces another, a rule stops
+  being retrievable because its tags were never sharpened.</p>
+
+  <p>None of that shows up as an error. Everything keeps working &#8212; the store answers
+  every query, the tests stay green, and the rot is invisible until the moment you needed
+  the rule that had silently stopped being served. The workbench exists to make that decay
+  <em>visible</em>, and to put the decisions it produces somewhere they can actually be made.</p>
+
+  <blockquote class="pull">
+    <p>The design constraint that shapes everything: the machine may compile, compare and
+    propose. It may not decide.</p>
+  </blockquote>
+</section>
+
+<section>
+  <div class="col">
+    <p class="kicker">Architecture</p>
+    <h2>Three repositories, one direction of flow</h2>
+    <p>Nothing in the browser ever touches a store. The phone reads a committed JSON file
+    and writes back <em>intents</em>; every write happens on the desktop, through the same
+    lifecycle code a decision made in a terminal would use.</p>
+  </div>
+
+  <figure class="bleed">
+    <pre>  .context/*.json  &#183;  20 project stores, hand-written, hand-editable
+          &#9474;
+          &#9474;  cambium reads every NAMED project &#8212; never by discovery
+          &#9660;
+  cambium_server.py &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658; snapshot.json          one file, gitignored (it is DATA)
+          &#9474;                        &#9474;
+          &#9474;                        &#9660;
+          &#9474;                build_dist.py           ALLOWLIST &#8594; dist/
+          &#9474;                        &#9474;
+          &#9474;                        &#9660;
+          &#9474;                wrangler deploy &#9472;&#9472;&#9658; Worker &#9472;&#9472;&#9658; token-gated URL &#9472;&#9472;&#9658; phone
+          &#9474;                                                          &#9474;
+          &#9474;                                                    a tap = INTENT
+          &#9474;                                                          &#9660;
+          &#9474;                                                   KV queue (no writes)
+          &#9474;                                                          &#9474;
+          &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; apply_queue.py &#9668;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;
+                                 &#9474;                    drained every 5 minutes
+                                 &#9492;&#9472;&#9472;&#9658; writes via context-keeper's own tools</pre>
+    <figcaption><b>The one-way rule.</b> Data flows left to right; only intents flow back.
+    A tap on the phone cannot reach a store even if the Worker were compromised &#8212; the
+    queue holds JSON describing a wish, and a process on the desktop decides whether to
+    honour it.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="col">
+    <p class="kicker">The three tiers</p>
+    <h2>What is written, what is compiled, and what is judged</h2>
+    <p>The distinction between these is the single most load-bearing idea in the system.
+    Get it wrong and you either lose provenance or start letting a heuristic rewrite
+    history.</p>
+  </div>
+
+  <div class="tbl-wrap col" style="max-width:none">
+    <table>
+      <thead><tr><th>Tier</th><th>Authored by</th><th>Regenerable</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Entries</b></td><td>A person, or an agent in session</td><td>No &#8212; source of truth</td>
+          <td>Typed records: decision, constraint, pipeline. One store per project.</td>
+        </tr>
+        <tr>
+          <td><b>Pages</b></td><td>The compiler</td><td>Yes &#8212; fully, from entries</td>
+          <td>A page records the exact entry ids it compiled from, when, and each source's
+          status and content hash at that moment.</td>
+        </tr>
+        <tr>
+          <td><b>Laws</b></td><td>Judgement</td><td>No</td>
+          <td>Cross-project lessons. Promoted local &#8594; team &#8594; org; org-scope laws recall
+          from every project and from a phone.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <h3>Staleness is computed, never guessed</h3>
+    <p>A page is stale when any source entry was superseded, deprecated, or changed since
+    the page compiled. The comparison is on <code>(status, updated_at, content_hash)</code>
+    &#8212; with <strong>the hash authoritative</strong>, because the stores are hand-editable and
+    a backfill can move a timestamp on text that never changed. The page names the entry
+    that caused it.</p>
+
+    <div class="note-bark">
+      <p><b>Why the hash wins.</b> Trusting <code>updated_at</code> alone means a maintenance
+      script that rewrites every record's timestamp marks all 427 pages stale overnight, and a
+      hand-edit that fixes a typo in place marks none. Both readings are wrong in the direction
+      that costs you trust in the signal.</p>
+    </div>
+
+    <h3>A law's equivalent: unincorporated evidence</h3>
+    <p>For laws there is no compiler to diff against, so the check is different: find every
+    entry carrying <em>two or more</em> of the law's topic tags that the law does not cite.
+    What's left is the work list. Two-tag overlap is a hint &#8212; measured precision on that
+    class of signal is about 22% &#8212; which is exactly why each one surfaces as a proposal
+    somebody rules on, never as an automatic edit.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <p class="kicker">The surface</p>
+    <h2>Six views, each answering one question</h2>
+    <p>It is scanned, not read. Summary before detail; state encoded in shape as well as
+    number, so what needs attention reads at a glance on a phone held one-handed.</p>
+  </div>
+
+  <figure>
+    <div class="ui">
+      <div class="ui-chrome">
+        <span class="ui-tab on">Lessons</span><span class="ui-tab">Projects</span>
+        <span class="ui-tab">Chains</span><span class="ui-tab">Pages</span>
+        <span class="ui-tab">Links</span><span class="ui-tab">Quality</span>
+      </div>
+      <div class="ui-law">
+        <div>
+          <div class="ui-head">
+            <span class="ui-title">Automate the detection, gate the write</span>
+            <span class="ui-state"><i class="ui-dot d-warn"></i>2 to review</span>
+          </div>
+          <p class="ui-prose">The machine proposes and the human decides. The supersession
+          survey is read-only by design, because an edge written from a heuristic silently
+          demotes a rule that may still be in force. Promotion to org scope requires an
+          endorsement &#8212; recall counts alone can never reach org.</p>
+          <div class="ui-seen">Cites <code>con-006-1f03</code> &#183; org scope &#183; 9 recalls</div>
+        </div>
+        <aside class="ui-aside">
+          <div class="ui-seen" style="margin-top:0">Carries this law's topics,
+          not yet cited &#8212; decide each one:</div>
+          <div class="ui-cand" style="margin-top:9px">
+            <code>con-006-1f03</code>
+            <div class="ui-eval" style="margin-top:8px">
+              <div class="ui-evalhead">
+                <span class="ui-state"><i class="ui-dot d-warn"></i>agent read it</span>
+                <b>the law should account for this</b>
+              </div>
+              <p class="ui-prose">It extends the law rather than matching its tags. Every
+              example under it is a <em>write</em>; this applies the identical gate to a
+              different irreversible consequence &#8212; spending.</p>
+            </div>
+            <div class="ui-actions">
+              <button class="ui-btn rec">Apply</button>
+              <button class="ui-btn">Not this</button>
+              <span class="ui-rec-tag">recommended</span>
+            </div>
+          </div>
+          <div class="ui-cand">
+            <code>dec-019-c61a</code>
+            <div class="ui-actions"><span class="ui-await">sent for eval &#183; awaiting verdict</span></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <figcaption><b>Lessons &#8212; &#8220;what we've learned&#8221;.</b> The law tier. Each law shows its text,
+    what it cites, and the candidate entries it has fallen behind. The amber chip in the header
+    is the tell for which laws have work; a law with nothing to review shows no controls at all.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="ui">
+      <div class="ui-bulkbar">
+        <button class="ui-btn">Send all 3 for eval</button>
+        <button class="ui-btn primary">Apply all 29 recommendations</button>
+      </div>
+      <div class="ui-row">
+        <div class="ui-head">
+          <span class="ui-title"><code>con-011-76f8</code> may supersede <code>con-010-acde</code></span>
+          <span class="ui-state"><i class="ui-dot d-unk"></i>lead</span>
+        </div>
+        <div class="ui-meta">shares scope <code>hooks/</code>; shares tags claude-code, hooks</div>
+        <div class="ui-eval">
+          <div class="ui-evalhead">
+            <span class="ui-state"><i class="ui-dot d-unk"></i>agent read it</span>
+            <b>related, not a replacement</b>
+            <span style="color:var(--ui-ink2)">&#183; confidence high &#183; claude-code session</span>
+          </div>
+          <p class="ui-prose">Both are <code>hooks/</code> rules and both still bind. One is
+          cost &#8212; import <code>store_paths</code>, never <code>server</code>, on any hot path.
+          The other is correctness &#8212; match scopes on whole path components everywhere. Neither
+          subsumes the other.</p>
+        </div>
+        <div class="ui-actions">
+          <button class="ui-btn">Details</button>
+          <button class="ui-btn">Apply</button>
+          <button class="ui-btn rec">Not this</button>
+          <span class="ui-rec-tag">recommended</span>
+        </div>
+      </div>
+      <div class="ui-row">
+        <div class="ui-head">
+          <span class="ui-title"><code>dec-021-b607</code> may supersede <code>dec-019-9c32</code></span>
+          <span class="ui-state"><i class="ui-dot d-warn"></i>likely</span>
+        </div>
+        <div class="ui-meta">newer entry names the older beside change language</div>
+        <div class="ui-actions">
+          <button class="ui-btn">Details</button>
+          <button class="ui-btn primary">Apply</button>
+          <button class="ui-btn">Not this</button>
+          <button class="ui-btn">Send for eval</button>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>Links &#8212; proposed supersessions.</b> Two tiers, and the difference is
+    measured, not asserted: <b>likely</b> means the newer entry names the older beside change
+    language (80% precision on 34 hand-labelled pairs); <b>lead</b> means they share a subject
+    and nothing more (21.9%). A verdict, once given, fills the button it points at.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="ui">
+      <div class="ui-sect">Needs attention</div>
+      <div class="ui-row">
+        <div class="ui-head">
+          <span class="ui-title">10 pages are stale</span>
+          <span class="ui-state"><i class="ui-dot d-warn"></i>rebuildable</span>
+        </div>
+        <div class="ui-meta">Their sources changed after they were compiled. Pages are build
+        artifacts, so this is a recompile, not a decision &#8212; nothing is judged and nothing is
+        written to a store.</div>
+        <div class="ui-actions"><button class="ui-btn rec">Rebuild 10 stale pages</button></div>
+      </div>
+      <div class="ui-row">
+        <div class="ui-head">
+          <span class="ui-title">page-cambium-privacy</span>
+          <span class="ui-state"><i class="ui-dot d-bad"></i>stale</span>
+        </div>
+        <div class="ui-meta">6 of 9 sources active &#183; compiled 3 days ago</div>
+        <div class="ui-seen"><code>con-015-12da superseded</code> <code>dec-026-6973 content changed</code></div>
+      </div>
+      <div class="ui-sect">All pages by project</div>
+      <table class="ui-tbl">
+        <thead><tr><th>Project</th><th>Pages</th><th>Sources</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td>cambium</td><td>38</td><td>212</td><td><span class="ui-state"><i class="ui-dot d-good"></i>all fresh</span></td></tr>
+          <tr><td>context-keeper</td><td>44</td><td>287</td><td><span class="ui-state"><i class="ui-dot d-bad"></i>3 stale</span></td></tr>
+          <tr><td>Conductor</td><td>17</td><td>96</td><td><span class="ui-state"><i class="ui-dot d-good"></i>all fresh</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Pages &#8212; 427 of them.</b> Stale ones become cards naming the entry that
+    caused it; everything else collapses to one row per project. Rendering 427 identical
+    &#8220;fresh&#8221; cards was the first version, and it made the view useless &#8212; the fix was deciding
+    that <em>only exceptions deserve a card</em>.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="ui">
+      <div class="ui-bars">
+        <div class="ui-bar"><span>unused</span><i style="width:100%"></i><b>223</b></div>
+        <div class="ui-bar"><span>isolated</span><i style="width:69%"></i><b>155</b></div>
+        <div class="ui-bar"><span>code_drift</span><i style="width:19%"></i><b>43</b></div>
+        <div class="ui-bar"><span>legacy</span><i style="width:12%"></i><b>26</b></div>
+        <div class="ui-bar"><span>enforcement</span><i style="width:7%"></i><b>15</b></div>
+      </div>
+      <div class="ui-meta" style="margin:14px 0 18px">484 issues across 325 flagged entries
+      &#8212; an entry usually carries more than one.</div>
+      <div class="ui-row">
+        <div class="ui-head">
+          <span class="ui-title">Conductor</span>
+          <span class="ui-state"><i class="ui-dot d-warn"></i>6 gaps</span>
+        </div>
+        <div class="ui-actions"><button class="ui-btn primary">Send 6 for repair</button></div>
+        <table class="ui-tbl">
+          <thead><tr><th>Entry</th><th>Issues</th></tr></thead>
+          <tbody>
+            <tr><td><code>dec-001</code></td><td>legacy</td></tr>
+            <tr><td><code>con-004</code></td><td>isolated, code_drift</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <figcaption><b>Quality &#8212; where the store is rotting.</b> Two denominators live on this
+    screen at once (flagged entries and individual issues), so both are named in the caption
+    under the chart. Naming them was a fix: the mismatch previously read as the dashboard
+    being wrong.</figcaption>
+  </figure>
+
+  <div class="col">
+    <p>The remaining two views are quieter. <strong>Projects</strong> is entry counts by
+    kind and status. <strong>Chains</strong> draws supersession edges as a graph &#8212; including
+    dangling ones, because a store reaches that state on its own when a target is pruned, and
+    drawing it honestly beats hiding it.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <p class="kicker">The loop</p>
+    <h2>From a tap on a phone to a write on a desktop</h2>
+    <p>This is the part that makes it a workbench rather than a dashboard. Every control
+    queues an <em>intent</em>. Nothing in the browser writes anything, ever.</p>
+  </div>
+
+  <div class="steps col" style="max-width:none">
+
+    <div class="step">
+      <div>
+        <h4>You open it on your phone<span class="free">free</span></h4>
+        <p>A token in the URL is the whole login. No account, no sign-in screen &#8212; and
+        nothing is served at all without it.</p>
+        <p>The proposal states what it asks, what evidence triggered it, and what that
+        evidence is worth. <b>Lead</b> means shared subject and nothing more: 21.9%
+        precision, measured on hand-labelled pairs.</p>
+      </div>
+      <div class="step-fig">
+        <div class="phone">
+          <div class="phone-bar"><b>9:41</b><span>Xylem memory</span></div>
+          <div class="phone-screen"><div class="ui">
+            <div class="ui-chrome" style="overflow-x:auto">
+              <span class="ui-tab">Lessons</span><span class="ui-tab on">Links</span>
+              <span class="ui-tab">Pages</span><span class="ui-tab">Quality</span>
+            </div>
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title"><code>con-011-76f8</code> may supersede
+                <code>con-010-acde</code></span>
+                <span class="ui-state"><i class="ui-dot d-unk"></i>lead</span>
+              </div>
+              <div class="ui-meta">shares scope <code>hooks/</code>; shares tags
+              claude-code, hooks</div>
+              <div class="ui-actions">
+                <button class="ui-btn">Details</button>
+                <button class="ui-btn primary">Apply</button>
+                <button class="ui-btn">Not this</button>
+                <button class="ui-btn">Send for eval</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="phone-cap"><b>Links.</b> Four controls, all thumb-sized. Nothing here can
+        write to a store.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <h4>You send the hard ones for a proper read<span class="free">free</span></h4>
+        <p>Some pairs cannot be judged from a summary. The tap files a request carrying
+        <em>both entries in full</em>, and the row says so immediately &#8212; because the
+        queue clears the moment it drains, and without a visible waiting state a successful
+        tap is indistinguishable from one that did nothing.</p>
+        <p>That was a real bug: thirty-six requests filed correctly, and the app showed no
+        trace of any of them.</p>
+      </div>
+      <div class="step-fig">
+        <div class="phone">
+          <div class="phone-bar"><b>9:41</b><span>Xylem memory</span></div>
+          <div class="phone-screen"><div class="ui">
+            <div class="ui-bulkbar" style="margin-bottom:10px">
+              <button class="ui-btn">Send all 3 for eval</button>
+            </div>
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title"><code>con-011-76f8</code> may supersede
+                <code>con-010-acde</code></span>
+              </div>
+              <div class="ui-actions">
+                <button class="ui-btn">Details</button>
+                <span class="ui-await">sent for eval &#183; awaiting verdict</span>
+              </div>
+            </div>
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title"><code>dec-021-b607</code> may supersede
+                <code>dec-019-9c32</code></span>
+                <span class="ui-state"><i class="ui-dot d-warn"></i>likely</span>
+              </div>
+              <div class="ui-actions">
+                <button class="ui-btn">Details</button>
+                <button class="ui-btn primary">Apply</button>
+                <button class="ui-btn">Not this</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="phone-cap"><b>Amber is this app&#8217;s pending tone</b> &#8212; never the
+        accent, which means &#8220;recommended&#8221;. They never share a row, and they mean
+        opposite things.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <h4>A drain on the desktop picks it up</h4>
+        <p>Every five minutes: read the queue, act, clear it. It holds a lockfile, because
+        the scheduler has no concurrent-run protection and two overlapping drains would back
+        up a store the first had already rewritten &#8212; destroying the very snapshot that
+        made the first one recoverable.</p>
+        <p>Everything affected is copied before the <em>first</em> write, so a run that dies
+        halfway restores to where it started rather than a midpoint nobody chose.</p>
+      </div>
+      <div class="step-fig">
+        <div class="term"><span class="dim">21:00:11</span>  APPLIED:
+  1 queued decision(s)
+
+  snapshot: ~/.xylem/queue-backups/20260816-210011
+  filed for eval con-011-76f8 -&gt; con-010-acde
+
+  applied 1, queue cleared (1 keys).
+  journal:  ~/.xylem/apply-journal.jsonl
+<span class="dim">21:00:39</span>  <span class="ok">published.</span></div>
+        <p class="phone-cap"><b>The desktop half.</b> Twelve of the twenty stores are not in
+        git, so that backup is the only undo that exists.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <h4>The next session reads it &#8212; nothing is spawned<span class="free">free</span></h4>
+        <p>A hook surfaces waiting requests the moment any session opens, anywhere. The
+        request already carries both entries, so the reading needs no lookup, no tools and no
+        separate model.</p>
+        <p>This is the part that was got wrong twice: first by firing a billed headless call
+        from the timer, then by reaching for a local model. Both were the same error &#8212;
+        the reading agent already holds the context.</p>
+      </div>
+      <div class="step-fig">
+        <div class="term">[Xylem workbench] 3 eval request(s) sent
+from the phone are waiting on a verdict.
+
+  con-011-76f8  did it replace con-010-acde?
+  dec-021-b607  did it replace dec-019-9c32?
+  quality:Conductor  repair 13 entries
+
+<span class="dim">Read and judge them yourself, in this
+session. Do NOT spawn an agent or call
+any model to do it.</span></div>
+        <p class="phone-cap"><b>Silent when the queue is empty</b>, so an ordinary session
+        pays one stat call for it.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <h4>The verdict comes back to your hand</h4>
+        <p>Not just an answer &#8212; the reasoning, citing the wording that decided it, and
+        the button it points at is filled and tagged. The recommendation lands on the control
+        you would actually press, instead of leaving you to translate it.</p>
+        <p><code>unsure</code> deliberately gets no recommendation and no shortcut. The honest
+        response to &#8220;I could not tell&#8221; is that a person has to look.</p>
+      </div>
+      <div class="step-fig">
+        <div class="phone">
+          <div class="phone-bar"><b>9:52</b><span>Xylem memory</span></div>
+          <div class="phone-screen"><div class="ui">
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title"><code>con-011-76f8</code> may supersede
+                <code>con-010-acde</code></span>
+                <span class="ui-state"><i class="ui-dot d-unk"></i>lead</span>
+              </div>
+              <div class="ui-eval">
+                <div class="ui-evalhead">
+                  <span class="ui-state"><i class="ui-dot d-unk"></i>agent read it</span>
+                  <b>related, not a replacement</b>
+                </div>
+                <p class="ui-prose">Both are <code>hooks/</code> rules and both still bind.
+                One is cost &#8212; import <code>store_paths</code>, never <code>server</code>,
+                on any hot path. The other is correctness &#8212; match scopes on whole path
+                components. Neither subsumes the other.</p>
+              </div>
+              <div class="ui-actions">
+                <button class="ui-btn">Details</button>
+                <button class="ui-btn">Apply</button>
+                <button class="ui-btn rec">Not this</button>
+                <span class="ui-rec-tag">recommended</span>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="phone-cap"><b>Send for eval is gone</b> from the row &#8212; once audited
+        there is nothing left to send.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <h4>You rule, and it takes effect</h4>
+        <p>One tap queues the implied action; the row confirms and the button withdraws so
+        you cannot tap something already decided. Bulk apply asks twice, with the count in the
+        confirm label, because committing thirty rulings in one gesture on a phone is easy to
+        do by accident and the undo is a backup directory.</p>
+        <p>The write lands on the next drain, through the same lifecycle code a decision made
+        at a terminal would use.</p>
+      </div>
+      <div class="step-fig">
+        <div class="phone">
+          <div class="phone-bar"><b>9:53</b><span>Xylem memory</span></div>
+          <div class="phone-screen"><div class="ui">
+            <div class="ui-bulkbar" style="margin-bottom:10px">
+              <button class="ui-btn primary">Tap again to apply 29 rulings</button>
+            </div>
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title"><code>con-011-76f8</code> may supersede
+                <code>con-010-acde</code></span>
+              </div>
+              <div class="ui-actions">
+                <button class="ui-btn">Details</button>
+                <span class="ui-state" style="font-weight:650">queued to dismiss</span>
+                <span class="ui-rec-tag" style="color:var(--ui-ink2)">undo</span>
+              </div>
+            </div>
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title">10 pages are stale</span>
+                <span class="ui-state"><i class="ui-dot d-warn"></i>rebuildable</span>
+              </div>
+              <div class="ui-actions">
+                <button class="ui-btn rec">Rebuild 10 stale pages</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="phone-cap"><b>Rebuild needs no agent at all.</b> Pages compile from entries,
+        so it is arithmetic, not judgement.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col" style="max-width:none">
+    <h3>The other views, at thumb width</h3>
+    <div class="phone-row">
+      <div>
+        <div class="phone">
+          <div class="phone-bar"><b>9:41</b><span>Lessons</span></div>
+          <div class="phone-screen"><div class="ui">
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title">Automate the detection, gate the write</span>
+                <span class="ui-state"><i class="ui-dot d-warn"></i>2 to review</span>
+              </div>
+              <p class="ui-prose">The machine proposes and the human decides. The supersession
+              survey is read-only by design, because an edge written from a heuristic silently
+              demotes a rule that may still be in force.</p>
+              <div class="ui-seen">org scope &#183; 9 recalls</div>
+              <div class="ui-sect" style="margin-top:14px">Not yet cited</div>
+              <div class="ui-cand">
+                <code>con-006-1f03</code>
+                <div class="ui-actions">
+                  <button class="ui-btn rec">Apply</button>
+                  <button class="ui-btn">Not this</button>
+                </div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="phone-cap"><b>Lessons.</b> The candidate list stacks below the law body on a
+        phone &#8212; scroll past the text to reach the controls.</p>
+      </div>
+
+      <div>
+        <div class="phone">
+          <div class="phone-bar"><b>9:44</b><span>Quality</span></div>
+          <div class="phone-screen"><div class="ui">
+            <div class="ui-bars" style="margin:0 0 12px">
+              <div class="ui-bar" style="grid-template-columns:78px 1fr 32px">
+                <span>unused</span><i style="width:100%"></i><b>223</b></div>
+              <div class="ui-bar" style="grid-template-columns:78px 1fr 32px">
+                <span>isolated</span><i style="width:69%"></i><b>155</b></div>
+              <div class="ui-bar" style="grid-template-columns:78px 1fr 32px">
+                <span>drift</span><i style="width:19%"></i><b>43</b></div>
+            </div>
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title">Conductor</span>
+                <span class="ui-state"><i class="ui-dot d-warn"></i>6 gaps</span>
+              </div>
+              <div class="ui-actions">
+                <button class="ui-btn primary">Send 6 for repair</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="phone-cap"><b>Quality.</b> One request per project, not per entry &#8212;
+        325 flagged entries would be 325 taps.</p>
+      </div>
+
+      <div>
+        <div class="phone">
+          <div class="phone-bar"><b>9:46</b><span>Pages</span></div>
+          <div class="phone-screen"><div class="ui">
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title">page-cambium-privacy</span>
+                <span class="ui-state"><i class="ui-dot d-bad"></i>stale</span>
+              </div>
+              <div class="ui-meta">6 of 9 sources active</div>
+              <div class="ui-seen"><code>con-015-12da superseded</code></div>
+            </div>
+            <div class="ui-row">
+              <div class="ui-head">
+                <span class="ui-title">context-keeper</span>
+                <span class="ui-state"><i class="ui-dot d-bad"></i>3 stale</span>
+              </div>
+              <div class="ui-meta">44 pages &#183; 287 sources</div>
+            </div>
+          </div></div>
+        </div>
+        <p class="phone-cap"><b>Pages.</b> Only exceptions get a card; the other 417 collapse
+        to one row per project.</p>
+      </div>
+    </div>
+    <p style="font-family:var(--sans);font-size:.82rem;color:var(--ink-3);margin-top:6px">
+    Scroll sideways. The frames are drawn at true 320px content width, so the wrapping above
+    is the real wrapping rather than a simulation.</p>
+  </div>
+
+</section>
+
+<section>
+  <div class="col">
+    <p class="kicker">Delegation</p>
+    <h2>&#8220;Send for eval&#8221; &#8212; and the mistake inside it</h2>
+    <p>Some proposals cannot be judged from a summary on a phone. That button files a
+    self-contained request carrying <em>both entries in full</em>, so the reading needs nothing
+    but the file.</p>
+
+    <blockquote class="pull">
+      <p>The agent is the session. There is no runner, and there must never be one.</p>
+    </blockquote>
+
+    <p>The first implementation shelled out to a billed headless model call, fired from the
+    five-minute timer &#8212; a metered charge per request, unattended, shipped switched on. That is
+    a standing cost dressed as a feature. It was <strong>deleted rather than disabled</strong>,
+    because a flag that can be flipped is not a guarantee.</p>
+
+    <p>The second attempt was to wire a local model instead. Same mistake in different clothes:
+    everything the request contains is already in the reading agent's context. The correct
+    design is that a request simply waits, and a hook surfaces it the moment any session opens
+    &#8212; so the <em>noticing</em> is automated while nothing is ever spawned.</p>
+
+    <div class="note-bark">
+      <p><b>The line that decides the whole design.</b> Ask of any piece of work: is it
+      arithmetic, or is it judgement? Arithmetic must never wait on a person. Judgement
+      must never be automated.</p>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Work</th><th>Kind</th><th>Who does it</th></tr></thead>
+        <tbody>
+          <tr><td>Rebuild a stale page</td><td>arithmetic</td>
+              <td>the drain, immediately</td></tr>
+          <tr><td>Add the links a checker already computed</td><td>arithmetic</td>
+              <td>the drain, immediately</td></tr>
+          <tr><td>Did this entry replace that one?</td><td>judgement</td>
+              <td>a session, when one opens</td></tr>
+          <tr><td>Should this law absorb this entry?</td><td>judgement</td>
+              <td>a session, when one opens</td></tr>
+          <tr><td>Is this rule still true of the code?</td><td>judgement</td>
+              <td>a session &#8212; and it must actually re-read</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Getting that line wrong in either direction is expensive. Automating judgement
+    means a heuristic silently retires a rule that is still in force. Waiting on a person
+    for arithmetic means a hundred and nine trivial repairs sit in a queue for twenty
+    minutes because nobody happened to open a terminal &#8212; which is exactly what
+    happened, and what moved the mechanical half into the drain.</p>
+
+    <h3>One repair that must never be automated</h3>
+    <p>A drifted entry &#8212; one whose code has moved underneath it &#8212; can be
+    &#8220;fixed&#8221; by writing anything to it at all, because updating stamps a fresh
+    verification timestamp and drift is measured from that stamp. The flag clears without
+    anyone reading the code.</p>
+    <p>So thirty-seven repairs were deliberately left undone. Doing them automatically, at
+    machine speed, across twenty projects would have been the worst available version of
+    that bug: a mesh that reports itself verified everywhere and has checked nothing.</p>
+
+    <blockquote class="pull">
+      <p>A safeguard that can be satisfied by touching the thing it guards is not a
+      safeguard.</p>
+    </blockquote>
+
+    <h3>What repair looks like from the far side</h3>
+    <p>Applying those hundred and nine links changed a hundred and nine entries &#8212; and
+    two hundred and one compiled pages immediately went stale, because their sources' content
+    hashes moved. Nothing broke; the pages simply stopped claiming to be current.</p>
+    <p>That is the staleness model doing the one thing it exists for. A repair in one tier
+    propagated to another without anybody tracking the dependency by hand, and the rebuild
+    that answers it is arithmetic, so it needs one tap and no reading at all.</p>
+
+    <h3>What a verdict may say</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Question</th><th>Verdicts</th><th>Implied action</th></tr></thead>
+        <tbody>
+          <tr><td>Did the newer entry replace the older?</td>
+              <td><code>supersedes</code> &#183; <code>related</code> &#183; <code>unrelated</code> &#183; <code>unsure</code></td>
+              <td>mark superseded / dismiss</td></tr>
+          <tr><td>Should this law account for this entry?</td>
+              <td><code>cite</code> &#183; <code>incidental</code> &#183; <code>unsure</code></td>
+              <td>cite in law / dismiss</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><code>unsure</code> deliberately gets no button and no recommendation. The honest
+    response to &#8220;I could not tell&#8221; is that a person has to look, and offering a shortcut there
+    would launder a non-answer into an action.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <p class="kicker">Security</p>
+    <h2>Four gates, because one is a single point of failure</h2>
+    <p>The snapshot carries every project's memory, including private repositories and
+    local-only work. This is the part that was got wrong first, and the reason it is now
+    checked on every deploy.</p>
+  </div>
+
+  <div class="gates col" style="max-width:none">
+    <div class="gate">
+      <h4><span>01</span> Path-token authentication</h4>
+      <p>The site is served only beneath a secret path segment. No token, no bytes.</p>
+    </div>
+    <div class="gate">
+      <h4><span>02</span> Worker runs before assets</h4>
+      <p>A platform setting, and without it the gate does not exist &#8212; static assets are served
+      <em>before</em> the Worker by default. The first deploy served the entire snapshot to the
+      open internet for four minutes because of exactly this.</p>
+    </div>
+    <div class="gate">
+      <h4><span>03</span> Allowlist build</h4>
+      <p>The publishable bundle is assembled by naming files, never by excluding them. Nothing
+      travels because nothing happened to exclude it.</p>
+    </div>
+    <div class="gate">
+      <h4><span>04</span> Verified on every publish</h4>
+      <p>The deploy script fetches the snapshot, the script and the index <em>without</em> the
+      token and throws if any of them returns success. A deploy that silently loses gate 02
+      must fail loudly, not quietly go public.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="note-bark">
+      <p><b>The rule that came out of it.</b> Never deploy data before the gate has been proven
+      on a data-free build. The tooling to do that already existed and was skipped, which is
+      the whole lesson: a safeguard you built and then did not use is not a safeguard.</p>
+    </div>
+  </div>
+</section>
+
+<section class="col">
+  <p class="kicker">Standing rules</p>
+  <h2>Invariants</h2>
+  <p>Each of these is a bug that already happened, written down so it happens once.</p>
+  <ul class="plain">
+    <li><b>Never spend money.</b> No metered call, no billed CLI, never on a timer, and never
+    offered as an option without its price attached &#8212; an option chosen without its cost is not
+    informed consent.</li>
+    <li><b>Never write to a store from the browser or the Worker.</b> Intents only.</li>
+    <li><b>Pages are artifacts; laws are judgement.</b> Recompile freely. Never auto-write a
+    supersession or a citation from a heuristic.</li>
+    <li><b>Bump the asset version everywhere at once.</b> Sweep every occurrence rather than
+    hand-picking &#8212; a missed entry in the precache list caches URLs the page never requests, so
+    it holds nothing useful and offline serves an empty shell. Invisible online.</li>
+    <li><b>Never bulk-edit an entry flagged as drifted in order to fix something else on it.</b>
+    Updating stamps a fresh verification timestamp, which clears the drift flag without anyone
+    re-reading the code &#8212; silencing the warning by touching it.</li>
+    <li><b>Status colours are reserved.</b> A recommendation uses the accent, never a status
+    colour, and never colour alone.</li>
+  </ul>
+</section>
+
+<section class="col">
+  <p class="kicker">Field notes</p>
+  <h2>Failures worth keeping</h2>
+  <p>These cost real time and none of them announced themselves.</p>
+
+  <h3>A span ignores height</h3>
+  <p>Meters, bars and status dots need to be block-level. Computed style will happily report
+  the right colour while nothing paints &#8212; the same trap landed three separate times in one
+  file before it was written down.</p>
+
+  <h3>A single em-dash killed an unattended job</h3>
+  <p>Redirected output on Windows defaults to a legacy codepage, and one dash raises an
+  encoding error that takes the whole run down. It costs nothing interactively, because a
+  console that renders it never complains.</p>
+
+  <h3>The shipped binary was four months behind its own fix</h3>
+  <p>A scheduler's Python jobs hung forever and recorded nothing &#8212; including a daily
+  medication reminder that had therefore never fired. The repository had been correct the
+  whole time; only the artifact was stale. That failure looks like nothing at all from a
+  dashboard, which is why the diagnosis started from a probe rather than from the logs.</p>
+
+  <h3>A filtered view answered a question it was not asked</h3>
+  <p>A directory listing with a name filter hid a folder, which led to a confident and wrong
+  conclusion about how the application was packaged. Twice in one session a diagnosis came
+  from one observation where a second would have contradicted it.</p>
+</section>
+
+<footer class="col" style="max-width:none">
+  <p>Xylem Workbench &#183; a private review surface for context-keeper, cambium and the
+  projects they watch. Every figure on this page is a faithful recreation of the interface
+  rather than a screenshot, so no project's own memory appears here.</p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,5 +1,7 @@
 # xylem-dashboard
 
+**[Read the illustrated walkthrough](https://jarmstrong158.github.io/xylem-dashboard/)** -- the three memory tiers, all six views, and the phone-to-desktop review loop, screen by screen.
+
 A static, offline-capable view of the Xylem memory mesh: every project's
 context-keeper entries, cambium's compiled pages and their staleness,
 supersession chains, and verify_quality gaps.
