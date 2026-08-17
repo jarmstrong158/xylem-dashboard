@@ -336,11 +336,30 @@ details.more > summary:hover { text-decoration: underline; }
   color: var(--series-1); text-transform: uppercase;
   align-self: center;
 }
-/* Filed and waiting on a reader. Muted rather than accented -- it reports a
-   state, it does not ask for a tap. */
+/* Filed and waiting on a reader.
+   Amber, because that is already this app's pending tone (stale pages, "N to
+   review") -- and NOT the series accent, which means "recommended": the two
+   never appear on the same row, but they mean opposite things (one is waiting,
+   the other is ready) and should never be learned as the same signal.
+   Text is full --ink on the tint rather than amber-on-amber, which is what
+   makes it legible; the dot carries the hue. */
 .await-tag {
-  font-size: .74rem; font-weight: 600; color: var(--ink-2);
-  align-self: center;
+  font-size: .72rem; font-weight: 650; letter-spacing: .02em;
+  color: var(--ink);
+  background: rgba(250, 178, 25, .18);                      /* fallback */
+  background: color-mix(in srgb, var(--warning) 20%, transparent);
+  border: 1px solid rgba(250, 178, 25, .55);
+  border-color: color-mix(in srgb, var(--warning) 55%, transparent);
+  border-radius: 999px; padding: 4px 10px;
+  display: inline-flex; align-items: center; gap: 6px;
+  align-self: center; white-space: nowrap;
+}
+/* A pseudo-element is inline by default and would ignore width/height, exactly
+   like the spans that swallowed the meters and dots earlier in this file. */
+.await-tag::before {
+  content: ""; display: block; flex: none;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--warning);
 }
 .decided::before {
   content: ""; width: 9px; height: 9px; border-radius: 50%;
