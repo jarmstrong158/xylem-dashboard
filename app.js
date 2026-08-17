@@ -529,6 +529,7 @@ async function runBulk(view, which, btn) {
       });
       if (!r.ok) throw new Error(String(r.status));
       QUEUE.set(payload.subject, payload);
+      rememberLocally(payload);
       ok++;
       // Paint each row as it lands, so a long run visibly progresses instead of
       // looking hung.
@@ -821,6 +822,40 @@ function renderQuality(snap) {
 const QUEUE = new Map();          // subject -> {action, ...}
 let queueAvailable = false;
 
+/* A tap has to survive a refresh, and the queue alone cannot promise that.
+
+   KV is eventually consistent on list-after-write: the POST succeeds, then a
+   GET in the next minute or so does not list it yet. Refresh inside that window
+   and the button comes back, so a tap that WORKED looks like a tap that failed
+   -- which is the "I pressed it, refreshed, and it wants me to press it again"
+   report, every time.
+
+   So each decision is also written to this device the moment it is made, and
+   merged over whatever the server reports. Entries expire on their own, so a
+   decision the drain has long since processed cannot haunt the screen. */
+const LOCAL_KEY = "xylem.pending.v1";
+const LOCAL_TTL_MS = 30 * 60 * 1000;
+
+function localPending() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LOCAL_KEY) || "{}");
+    const now = Date.now();
+    const live = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v && v.at && now - v.at < LOCAL_TTL_MS) live[k] = v;
+    }
+    return live;
+  } catch { return {}; }
+}
+
+function rememberLocally(payload) {
+  try {
+    const all = localPending();
+    all[payload.subject] = { ...payload, at: Date.now() };
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(all));
+  } catch { /* private mode or quota: the server copy still exists */ }
+}
+
 async function loadQueue() {
   try {
     const r = await fetch("api/queue", { cache: "no-store" });
@@ -828,6 +863,10 @@ async function loadQueue() {
     const data = await r.json();
     QUEUE.clear();
     for (const it of data.items || []) QUEUE.set(it.subject, it);
+    // Taps this device made that the server has not surfaced yet.
+    for (const [k, v] of Object.entries(localPending())) {
+      if (!QUEUE.has(k)) QUEUE.set(k, v);
+    }
     queueAvailable = true;
   } catch {
     // Read-only mode is a legitimate state (opened from a local file server,
@@ -847,6 +886,7 @@ async function decide(payload, btn) {
     });
     if (!r.ok) throw new Error(String(r.status));
     QUEUE.set(payload.subject, payload);
+    rememberLocally(payload);          // survives a refresh through KV lag
     paintDecision(row, payload.action);
   } catch (e) {
     row.dataset.pending = "";
