@@ -197,19 +197,17 @@ function renderLessons(snap) {
                 ? (cand.tags || []).filter((t) => (law.topics || []).includes(t))
                 : [];
               const cev = (law.unincorporated_evals || {})[e];
+              // The queued intent has to name the project itself: unlike a link,
+              // a candidate id arrives with no project attached, and the desktop
+              // would have to guess which store holds it.
+              const cpayload = { kind: "candidate", subject, law: law.id,
+                                 older: e, project: (cand || {}).project };
               return `<div class="candidate" data-subject="${esc(subject)}">
                 <code>${esc(e)}</code>
                 ${cand && cand.title
                   ? `<span class="cand-title">${esc(clamp(cand.title, 90))}</span>` : ""}
-                ${actionBar(subject, { kind: "candidate", subject,
-                                       law: law.id, older: e,
-                                       // The queued intent has to name the project
-                                       // itself: unlike a link, a candidate id
-                                       // arrives with no project attached, and the
-                                       // desktop would have to guess which store
-                                       // holds it.
-                                       project: (cand || {}).project })}
-                ${cev ? evalBlock(cev) : ""}
+                ${actionBar(subject, cpayload)}
+                ${cev ? evalBlock(cev, cpayload) : ""}
                 ${detailsFor([e], shared.length
                   ? `<p class="detail-why">Matched this law on
                      <b>${esc(shared.join(", "))}</b>. Apply if the law should
@@ -427,14 +425,36 @@ const EVAL_VERDICT = {
   unsure: { label: "could not tell", cls: "unknown" },
 };
 
-function evalBlock(ev) {
+/* Each verdict implies exactly one action, so Implement queues it directly
+   instead of making you translate "supersedes" back into which button to press.
+   It is still a tap, and it still goes through the same queue and the same
+   drain -- the gate has not moved, the arithmetic has. `unsure` implies nothing
+   and gets no button: the honest answer to "I could not tell" is that a person
+   has to look. */
+const IMPLIES = {
+  supersedes: { action: "apply", label: "Implement: mark superseded" },
+  related: { action: "dismiss", label: "Implement: not a replacement" },
+  unrelated: { action: "dismiss", label: "Implement: not a replacement" },
+  cite: { action: "apply", label: "Implement: cite in this law" },
+  incidental: { action: "dismiss", label: "Implement: mark incidental" },
+  unsure: null,
+};
+
+function evalBlock(ev, payload) {
   const v = EVAL_VERDICT[ev.verdict] || { label: ev.verdict || "audited", cls: "unknown" };
   const conf = ev.confidence != null ? ` · confidence ${esc(String(ev.confidence))}` : "";
+  const imp = IMPLIES[ev.verdict];
+  // Hidden once the pair is already decided, and hidden in read-only mode, for
+  // the same reasons the action bar is.
+  const showImp = imp && payload && queueAvailable && !QUEUE.get(payload.subject);
   return `<div class="evalbox">
     <div class="evalhead">${state(v.cls, "agent read it")}
       <b>${esc(v.label)}</b><span class="muted">${conf}${
         ev.model ? ` · ${esc(ev.model)}` : ""}</span></div>
     ${ev.reasoning ? `<p class="prose">${esc(ev.reasoning)}</p>` : ""}
+    ${showImp ? `<div class="eval-act"><button class="act implement"
+        data-payload="${esc(JSON.stringify(payload))}"
+        data-implement="${esc(imp.action)}">${esc(imp.label)}</button></div>` : ""}
   </div>`;
 }
 
@@ -450,6 +470,8 @@ function renderLinks(snap) {
     if (!l.proposals.length) return "";
     const rows = l.proposals.map((r) => {
       const subject = `${p.name}:${r.newer_id}:${r.older_id}`;
+      const payload = { kind: "link", subject, project: p.name,
+                        older: r.older_id, newer: r.newer_id };
       return `<article class="row" data-subject="${esc(subject)}">
       <div class="head">
         <span class="title"><code>${esc(r.newer_id)}</code> may supersede
@@ -458,15 +480,14 @@ function renderLinks(snap) {
       </div>
       ${(r.replacement_signals || []).length
         ? `<div class="meta">${esc(r.replacement_signals.join("; "))}</div>` : ""}
-      ${r.eval ? evalBlock(r.eval) : ""}
+      ${r.eval ? evalBlock(r.eval, payload) : ""}
       ${r.newer_summary
         ? `<p class="prose">${esc(clamp(r.newer_summary, 130))}<br>
            <span class="muted">replacing:</span> ${esc(clamp(r.older_summary || "", 130))}</p>`
         : ""}
       <div class="seen">overlap ${esc(String(r.overlap_score ?? "?"))}${
         (r.shared_tags || []).length ? ` · shares <b>${esc(r.shared_tags.join(", "))}</b>` : ""}</div>
-      ${actionBar(subject, { kind: "link", subject, project: p.name,
-                             older: r.older_id, newer: r.newer_id })}
+      ${actionBar(subject, payload)}
       ${detailsFor([r.newer_id, r.older_id],
         `<p class="detail-why">Apply records that <code>${esc(r.newer_id)}</code>
          REPLACED <code>${esc(r.older_id)}</code>: the older entry becomes
@@ -614,6 +635,11 @@ const DECISION_LABEL = {
 function paintDecision(row, action) {
   row.dataset.pending = "";
   row.dataset.decided = action;
+  // Implement lives in the verdict block, not the action bar, so replacing the
+  // bar below would leave it sitting there inviting a second tap on something
+  // already decided.
+  const impl = row.querySelector(".eval-act");
+  if (impl) impl.remove();
   const box = row.querySelector(".actions");
   if (!box) return;
   const tag = document.createElement("span");
@@ -716,7 +742,8 @@ document.addEventListener("click", (e) => {
   const btn = e.target.closest("button.act");
   if (!btn) return;
   const payload = JSON.parse(btn.dataset.payload);
-  payload.action = btn.dataset.eval ? "eval"
+  payload.action = btn.dataset.implement ? btn.dataset.implement
+                 : btn.dataset.eval ? "eval"
                  : btn.dataset.dismiss ? "dismiss"
                  : "apply";
   decide(payload, btn);

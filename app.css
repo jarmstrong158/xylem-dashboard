@@ -315,6 +315,12 @@ details.more > summary:hover { text-decoration: underline; }
 .evalhead .muted { font-weight: 400; }
 .evalbox .prose { margin-top: 7px; }
 .act.eval { border-color: var(--line-strong); color: var(--ink-2); }
+
+/* Implement carries the verdict's implied action, so it is the emphatic control
+   inside the box -- but it stays a button among buttons, not a status colour. */
+.eval-act { margin-top: 10px; }
+.act.implement { border-color: var(--series-1); color: var(--series-1); font-weight: 650; }
+.candidate .eval-act { margin-top: 8px; }
 .decided::before {
   content: ""; width: 9px; height: 9px; border-radius: 50%;
   background: var(--good); display: inline-block;
