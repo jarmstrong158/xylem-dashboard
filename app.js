@@ -668,6 +668,37 @@ function renderQuality(snap) {
   const issueTotal = rows.reduce((a, r) => a + r.value, 0);
   const flagged = (snap.totals || {}).quality_gaps || 0;
 
+  /* Every issue, bucketed by what can actually be DONE about it. A single
+     total treats "one tap fixes this", "this clears itself", and "somebody has
+     to read code" as the same outstanding item -- so the number never moves and
+     the app reads as broken even while it is working. */
+  const cls = { auto: 0, review: 0, waiting: 0, blocked: 0 };
+  for (const p of snap.projects) {
+    const g = (p.quality || {}).gap_classes;
+    if (g) for (const k of Object.keys(cls)) cls[k] += g[k] || 0;
+  }
+  const CLS_COPY = {
+    auto:    ["Fixable now", "One tap. The desktop applies these with no judgement involved — links a checker already computed, rationale already written, hints drawn from the entry's own words."],
+    review:  ["Needs writing, then your approval", "An agent drafts the text in a session, you approve or reject it on the card. Nothing is written until you tap."],
+    waiting: ["Already remediated", "These entries were loaded often and never queried, so they now carry retrieval hints. The flag only clears once one is actually returned by a search — no edit can force it."],
+    blocked: ["Blocked on a code read", "The code moved under these entries. Writing anything would stamp them as re-verified without anyone checking, so they are left alone until read."],
+  };
+  const clsCards = `<div class="card">
+    <div class="section-h" style="margin:0 0 4px">What can be done about them</div>
+    <p class="meta" style="margin:0 0 14px">${issueTotal} issues across ${flagged}
+      flagged entries. They are not one queue — these four behave completely
+      differently.</p>
+    ${Object.entries(CLS_COPY).map(([k, [title, why]]) => `
+      <div class="row" style="margin-bottom:8px">
+        <div class="head">
+          <span class="title">${esc(title)}</span>
+          ${state(k === "auto" ? "good" : k === "blocked" ? "bad" : k === "review" ? "warn" : "unknown",
+                  String(cls[k]))}
+        </div>
+        <div class="meta">${esc(why)}</div>
+      </div>`).join("")}
+  </div>`;
+
   /* The KPI counts flagged ENTRIES; this counts ISSUES, and one entry usually
      carries several. Two different denominators on one screen is how a reader
      concludes the dashboard is wrong, so both are named. */
@@ -725,11 +756,19 @@ function renderQuality(snap) {
       ${props}
       ${!queueAvailable ? "" : QUEUE.get(subject)
         ? `<span class="actions"><span class="decided">queued for repair</span></span>`
+        : q.awaiting_repair && (q.fixable_now || 0) === 0
+        ? `<span class="actions"><span class="muted" style="font-size:.78rem">Repaired —
+             what remains needs writing or a code read, see the breakdown above</span></span>`
         : q.awaiting_repair
         ? `<span class="actions"><span class="await-tag">sent for repair · awaiting a session</span></span>`
-        : `<span class="actions"><button class="act eval"
+        : (q.fixable_now || 0) > 0
+        ? `<span class="actions"><button class="act eval implement"
              data-payload="${esc(JSON.stringify(qpayload))}"
-             data-eval="1">Send ${q.gaps.length} for repair</button></span>`}
+             data-eval="1">Fix ${q.fixable_now} now</button>
+           <span class="muted" style="font-size:.76rem">${
+             q.gaps.length - q.fixable_now} need reading or are waiting</span></span>`
+        : `<span class="actions"><span class="muted" style="font-size:.78rem">Nothing
+             here can be fixed automatically — see the breakdown above</span></span>`}
       <table class="tv"><thead><tr><th>Entry</th><th>Issues</th></tr></thead><tbody>
         ${q.gaps.slice(0, 40).map((g) => `<tr>
           <td><code>${esc(g.id)}</code></td>
@@ -740,7 +779,7 @@ function renderQuality(snap) {
     </article>`;
   });
 
-  $("#view-quality").innerHTML = chart
+  $("#view-quality").innerHTML = clsCards + chart
     + `<div class="section-h">By project</div>` + bulkBar("quality") + blocks.join("");
 }
 
