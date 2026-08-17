@@ -896,6 +896,27 @@ function paintDecision(row, action) {
   box.replaceChildren(tag, undo);
 }
 
+/* Re-sync when the app comes back to the foreground.
+
+   decide() records a decision optimistically so a review pass feels immediate,
+   but nothing ever re-read the queue afterwards. The desktop drains every five
+   minutes, so a page left open on a phone kept showing "queued to apply" for
+   work that had already landed -- the buttons stayed hidden and the app looked
+   stuck. Refreshing on visibility costs one small request at the moment
+   somebody is actually looking. */
+let LAST_SNAP = null;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !LAST_SNAP) return;
+  // Re-render every view that carries decision state, so whichever tab is open
+  // is correct without needing to know which one that is.
+  loadQueue().then(() => {
+    renderLinks(LAST_SNAP);
+    renderLessons(LAST_SNAP);
+    renderQuality(LAST_SNAP);
+    renderPages(LAST_SNAP);
+  });
+});
+
 /* Every entry in the mesh, by id, so a review can show what it is actually
    about rather than an id and a shrug. */
 const ENTRIES = new Map();
@@ -1051,6 +1072,7 @@ fetch("snapshot.json", { cache: "no-store" })
     });
   })
   .then((snap) => {
+    LAST_SNAP = snap;
     indexEntries(snap);
     renderKpis(snap);
     renderBanners(snap);

@@ -11,14 +11,14 @@
    query in index.html. Pinned at v1, an installed client served the first shell
    it ever cached forever — new markup against old styles, which presents as a
    broken dashboard rather than a stale one. */
-const SHELL = "xylem-shell-v21";
+const SHELL = "xylem-shell-v22";
 const DATA = "xylem-data-v1";
 /* These URLs must carry the SAME ?v= as index.html. They are precache keys, and
    a cache is keyed by URL: leaving them a version behind caches app.js?v=N-1,
    which the page never requests, so the precache holds nothing the page uses and
    offline serves an empty shell. Nothing warns you -- online it works perfectly,
    because every request just misses the cache and goes to network. */
-const ASSETS = ["./", "index.html", "app.css?v=21", "app.js?v=21",
+const ASSETS = ["./", "index.html", "app.css?v=22", "app.js?v=22",
                 "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
