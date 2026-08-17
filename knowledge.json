@@ -1,3 +1,41 @@
 {
-  "items": []
+  "items": [
+    {
+      "id": "k-7720afe4",
+      "type": "memory",
+      "kind": "constraint",
+      "content": "NEVER spend the user's money. No metered API call, no billed CLI invocation (including `claude -p` / headless Claude Code), no paid service \u2014 not to build a feature, not to test one, and never to inspect a response shape. If a design needs a paid call, quote the price BEFORE writing the code, and never present a paid option in a choice list without its cost attached: an option chosen without its price is not informed consent. Never put a billed call on a timer, hook, or any unattended path \u2014 that is a standing charge, not a feature. When a paid path must be removed, DELETE it rather than gate it behind a flag; a switch that can be flipped is not a guarantee. The correct free substitute is almost always to prepare the work (file a self-contained request with everything needed) and let the reading happen inside the interactive session the user is already paying for.",
+      "why": "Money leaves the account and does not come back, and an automated caller repeats the mistake while nobody is watching. Cost is invisible in a way bugs are not: nothing errors, nothing looks broken, and the only signal is a bill later. Incident: an agent-audit step was implemented as `claude -p` fired from a 5-minute scheduler and shipped switched ON. Three billed calls (~$0.29), one of them purely to look at a JSON envelope's shape, and cost instrumentation was only added after the first spend so most of it was never even recorded.",
+      "tags": [
+        "cost",
+        "money",
+        "billing",
+        "api",
+        "safety",
+        "automation",
+        "absolute",
+        "claude-p",
+        "headless",
+        "scheduler"
+      ],
+      "scope": "team",
+      "project": "xylem-dashboard",
+      "source": {
+        "system": "manual",
+        "ref": ""
+      },
+      "created_by": "claude-code",
+      "created_at": "2026-08-17T01:10:56.891423+00:00",
+      "updated_at": "2026-08-17T01:11:08.333091+00:00",
+      "status": "active",
+      "trust": {
+        "recalls": 0,
+        "endorsements": [],
+        "projects": [
+          "xylem-dashboard"
+        ]
+      },
+      "last_verified": "2026-08-17T01:11:08.333091+00:00"
+    }
+  ]
 }
