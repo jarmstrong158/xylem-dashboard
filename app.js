@@ -489,13 +489,21 @@ function bulkNote(view, payload, ev, awaiting) {
    Applying commits N rulings to stores in one gesture on a phone, where a
    mis-tap is easy and the undo is a backup directory. The count is in the
    confirm label so you are agreeing to a number, not to a word. */
+/* Each view sends a different THING, and one generic label made the quality bar
+   read "Send all 19 for eval" when what it queues is 19 projects for repair. */
+const BULK_SEND_LABEL = {
+  links: (n) => `Send all ${n} for eval`,
+  lessons: (n) => `Send all ${n} for eval`,
+  quality: (n) => `Send all ${n} ${n === 1 ? "project" : "projects"} for repair`,
+};
+
 function bulkBar(view) {
   if (!queueAvailable) return "";
   const b = BULK[view];
   if (!b.send.length && !b.apply.length) return "";
   return `<div class="bulkbar" data-view="${esc(view)}">
     ${b.send.length ? `<button class="act bulk" data-bulk="send" data-view="${esc(view)}">
-        Send all ${b.send.length} for eval</button>` : ""}
+        ${esc(BULK_SEND_LABEL[view](b.send.length))}</button>` : ""}
     ${b.apply.length ? `<button class="act bulk implement" data-bulk="apply" data-view="${esc(view)}">
         Apply all ${b.apply.length} recommendations</button>` : ""}
     <span class="bulk-status"></span>
