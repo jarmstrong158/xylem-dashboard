@@ -1005,13 +1005,27 @@ fetch("snapshot.json", { cache: "no-store" })
     const t = snap.totals || {};
     $("#subtitle").textContent =
       `${plural(t.projects || 0, "project", "projects")} · ${t.entries || 0} entries`;
-    $("#foot-note").textContent = (snap.includes_bodies
-      ? "Snapshot includes entry text — keep it private."
-      : "Snapshot carries ids and counts only.")
-      + (queueAvailable
-          ? ` ${QUEUE.size} decision(s) queued; run publish.ps1 on the desktop to apply.`
-          : " Read-only: decisions cannot be queued from here.");
-    return loadQueue().then(() => snap);
+    /* Build stamp, visible in the app. A service worker that pinned an old
+       shell kept this client on app.js?v=4 through thirteen deploys while the
+       data kept updating, so the interface looked frozen and there was no way
+       to tell from inside the app whether you were looking at the current one.
+       Now there is: if this number lags the repo, you are on a stale shell. */
+    // AFTER loadQueue, not before: queueAvailable is set by that call, so
+    // writing the footer first always reported "read-only" on a first load even
+    // when the queue answered fine -- telling the user the app cannot act at the
+    // exact moment it can.
+    return loadQueue().then(() => {
+      const src = (document.querySelector('script[src*="app.js"]') || {}).src || "";
+      const build = (src.match(/[?&]v=(\d+)/) || [])[1] || "?";
+      $("#foot-note").textContent = (snap.includes_bodies
+        ? "Snapshot includes entry text — keep it private."
+        : "Snapshot carries ids and counts only.")
+        + (queueAvailable
+            ? ` ${QUEUE.size} decision(s) queued; the desktop applies them within 5 minutes.`
+            : " Read-only: decisions cannot be queued from here.")
+        + ` · interface build v${build}`;
+      return snap;
+    });
   })
   .then((snap) => {
     indexEntries(snap);
