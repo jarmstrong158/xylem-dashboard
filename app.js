@@ -475,9 +475,10 @@ function renderLinks(snap) {
       measured 80% precision on 34 hand-labelled pairs. Everything else shares a
       subject and nothing more, which measured 21.9%. Apply the ones you agree with
       via <code>deprecate_entry(old, reason, superseded_by=new)</code>.
-      <br><b>Send for eval</b> hands a pair to an agent on the PC, which reads both
-      entries in full and reports back here with its reasoning. It never writes to
-      a store — the ruling stays yours.</div>`
+      <br><b>Send for eval</b> queues the pair for the next Claude Code session on
+      the PC, which reads both entries in full and reports back here with its
+      reasoning. Nothing extra is spent and nothing is written to a store — the
+      ruling stays yours.</div>`
     + blocks.join("");
 }
 
