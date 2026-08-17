@@ -365,6 +365,53 @@ def _mechanical_links(project, entry, known):
     return ids or None
 
 
+def _derive_hints(entry):
+    """Retrieval hints built from the entry's OWN words. Nothing invented.
+
+    `unused` means the entry is injected into context repeatedly and never
+    returned by a targeted query -- it is effectively unreachable by any phrasing
+    except the one already in its summary. Three hints derived from its own text:
+    the subject line, the identifiers it names, and its tags as a phrase. Every
+    one is recoverable from the entry, so this cannot fabricate a claim the entry
+    does not make, and mediocre hints beat none."""
+    import re
+    text = (entry.get("summary") or entry.get("rule") or entry.get("name") or "").strip()
+    if not text:
+        return None
+    first = re.split(r"(?<=[.!?])\s", text)[0][:110].strip().rstrip(".")
+    hints = [first.lower()] if first else []
+    idents = re.findall(
+        r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+"      # dotted.calls
+        r"|[a-z][a-z0-9]*(?:_[a-z0-9]+)+"                   # snake_case
+        r"|[A-Za-z0-9_-]+/[A-Za-z0-9_./-]+", text)          # paths/like/this
+    seen, keep = set(), []
+    for i in idents:
+        if len(i) < 4 or i.lower() in seen:
+            continue
+        seen.add(i.lower())
+        keep.append(i)
+    if keep:
+        hints.append("how does %s work" % " ".join(keep[:3]))
+    tags = [str(t) for t in (entry.get("tags") or []) if t]
+    if len(tags) >= 2:
+        hints.append(" ".join(tags[:4]).replace("-", " "))
+    out = [h for h in hints if h and len(h) > 8][:4]
+    return out or None
+
+
+def _migrate_legacy(entry):
+    """Move a pre-v0.4 entry's preserved freeform rationale into why_chosen.
+
+    A verbatim copy, not a rewrite. The text already exists and already says why;
+    it was simply sitting in a field nothing reads, which is the entire content
+    of the `legacy` flag. Returns None when there is nothing to move, rather than
+    inventing a rationale."""
+    r = (entry.get("rationale") or "").strip()
+    if not r or (entry.get("why_chosen") or "").strip():
+        return None
+    return r
+
+
 def _repair_mechanical(project, gaps):
     """Apply every mechanical fix now. Returns (linked, entries still needing a read).
 
@@ -375,18 +422,55 @@ def _repair_mechanical(project, gaps):
     known = _known_ids(project)
     pdir = os.path.join(REPOS, project)
     linked, remaining = 0, []
+    live = {}
+    for fn in ("decisions.json", "constraints.json", "pipelines.json"):
+        fp = os.path.join(pdir, ".context", fn)
+        if not os.path.exists(fp):
+            continue
+        try:
+            with open(fp, encoding="utf-8") as f:
+                for x in json.load(f):
+                    live[x["id"]] = x
+        except (OSError, ValueError):
+            pass
+
     for e in gaps:
+        types = {i.get("type") for i in e.get("issues", [])}
+        # con-018-f4f2: any write stamps verified_at and clears the drift flag
+        # without anyone re-reading the code. Never touch a drifted entry.
+        if "code_drift" in types:
+            remaining.append(e)
+            continue
+        entry = live.get(e.get("id")) or {}
+        updates, cleared = {}, set()
+
         ids = _mechanical_links(project, e, known)
-        if ids is None:
+        if ids is not None:
+            updates["related_to"] = ids
+            cleared.add("isolated")
+
+        if "unused" in types and not (entry.get("retrieval_hints") or []):
+            hints = _derive_hints(entry)
+            if hints:
+                updates["retrieval_hints"] = hints
+                cleared.add("unused")
+
+        if "legacy" in types:
+            why = _migrate_legacy(entry)
+            if why:
+                updates["why_chosen"] = why
+                cleared.add("legacy")
+
+        if not updates:
             remaining.append(e)
             continue
         res = ck.handle_update_entry({"id": e.get("id"), "project_dir": pdir,
-                                      "updates": {"related_to": ids}})
+                                      "updates": updates})
         if res.get("error"):
             remaining.append(e)
             continue
         linked += 1
-        others = [i for i in e.get("issues", []) if i.get("type") != "isolated"]
+        others = [i for i in e.get("issues", []) if i.get("type") not in cleared]
         if others:
             remaining.append(dict(e, issues=others))
     return linked, remaining
