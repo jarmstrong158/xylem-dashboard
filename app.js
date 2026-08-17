@@ -474,7 +474,8 @@ const IMPLIES = {
 /* Bulk actions, collected during render so the buttons count exactly what is on
    screen rather than re-deriving eligibility from the snapshot and drifting.
    Keyed by view; each render replaces its own bucket. */
-const BULK = { links: { send: [], apply: [] }, lessons: { send: [], apply: [] } };
+const BULK = { links: { send: [], apply: [] }, lessons: { send: [], apply: [] },
+               quality: { send: [], apply: [] } };
 
 function bulkNote(view, payload, ev, awaiting) {
   if (QUEUE.get(payload.subject)) return;          // already decided this session
@@ -635,6 +636,9 @@ function renderLinks(snap) {
 
 /* ---------------------------------------------------------------- quality */
 function renderQuality(snap) {
+  // Own bucket, own bar. A repair request is per PROJECT, so this list is
+  // projects and never entries -- and it can never queue a link or a candidate.
+  BULK.quality = { send: [], apply: [] };
   const byType = {};
   let checked = 0;
   for (const p of snap.projects) {
@@ -680,11 +684,21 @@ function renderQuality(snap) {
              against. That is "no gaps found", not "nothing drifted".</div>` : ""}
       </article>`;
     }
-    return `<article class="row">
+    const subject = `quality:${p.name}`;
+    const qpayload = { kind: "quality", subject, project: p.name };
+    bulkNote("quality", qpayload, null, q.awaiting_repair);
+    return `<article class="row" data-subject="${esc(subject)}">
       <div class="head"><span class="title">${esc(p.name)}</span>
         ${state("warn", plural(q.gaps.length, "gap", "gaps"))}</div>
       ${q.drift_checked === false
         ? `<div class="meta">Drift not checked — no work tree to compare against.</div>` : ""}
+      ${!queueAvailable ? "" : QUEUE.get(subject)
+        ? `<span class="actions"><span class="decided">queued for repair</span></span>`
+        : q.awaiting_repair
+        ? `<span class="actions"><span class="await-tag">sent for repair · awaiting a session</span></span>`
+        : `<span class="actions"><button class="act eval"
+             data-payload="${esc(JSON.stringify(qpayload))}"
+             data-eval="1">Send ${q.gaps.length} for repair</button></span>`}
       <table class="tv"><thead><tr><th>Entry</th><th>Issues</th></tr></thead><tbody>
         ${q.gaps.slice(0, 40).map((g) => `<tr>
           <td><code>${esc(g.id)}</code></td>
@@ -696,7 +710,7 @@ function renderQuality(snap) {
   });
 
   $("#view-quality").innerHTML = chart
-    + `<div class="section-h">By project</div>` + blocks.join("");
+    + `<div class="section-h">By project</div>` + bulkBar("quality") + blocks.join("");
 }
 
 /* --------------------------------------------------------------- decisions

@@ -136,7 +136,24 @@ def cmd_list(_args):
             continue
         print("=" * 72)
         print("key      %s" % req["key"])
-        if req.get("eval_kind") == "candidate":
+        if req.get("eval_kind") == "quality":
+            print("question repair the flagged entries in %s" % req["project"])
+            print("         %d flagged%s" % (req["flagged"],
+                  (", showing %d" % len(req["entries"])) if req.get("capped") else ""))
+            print("         fix with context-keeper update_entry, then:")
+            print('         python tools/evals.py done "%s" "<what you changed>"' % req["key"])
+            counts = {}
+            for e in req["entries"]:
+                for i in e.get("issues", []):
+                    counts[i.get("type")] = counts.get(i.get("type"), 0) + 1
+            print("         issue mix: %s" % ", ".join(
+                "%s=%d" % kv for kv in sorted(counts.items(), key=lambda x: -x[1])))
+            for e in req["entries"]:
+                print("\n  --- %s (%s)" % (e.get("id"), e.get("type")))
+                print("      %s" % (e.get("summary") or "")[:200])
+                for i in e.get("issues", []):
+                    print("      [%s] %s" % (i.get("type"), (i.get("detail") or "")[:300]))
+        elif req.get("eval_kind") == "candidate":
             law = req["law"]
             print("question does law %s need to account for %s?  (project %s)"
                   % (law.get("id"), req["entry_id"], req.get("project")))
@@ -224,10 +241,39 @@ def cmd_record(args):
     return 0
 
 
+def cmd_done(args):
+    """Retire a repair request once the entries have actually been fixed.
+
+    A quality repair has no verdict -- the proof is the gap count dropping on
+    the next publish, which is a better signal than any word recorded here. All
+    this does is close the request and leave a note saying what was changed, so
+    the same 40 entries are not read again next session."""
+    dec = load_decisions()
+    if args.key in dec.get("eval_pending", []):
+        dec["eval_pending"].remove(args.key)
+        save_decisions(dec)
+    name = args.key.replace(":", "_") + ".json"
+    src = os.path.join(PENDING, name)
+    if not os.path.exists(src):
+        print("no pending request with key %s" % args.key)
+        return 1
+    os.makedirs(DONE, exist_ok=True)
+    shutil.move(src, os.path.join(DONE, name))
+    journal({"event": "repair", "key": args.key, "outcome": "done",
+             "note": args.note.strip(), "by": args.by})
+    print("closed %s" % args.key)
+    print("run publish.ps1 to see the gap count move.")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="print every pending request in full")
+    dn = sub.add_parser("done", help="close a repair request after fixing it")
+    dn.add_argument("key")
+    dn.add_argument("note")
+    dn.add_argument("--by", default="claude-code session")
     r = sub.add_parser("record", help="record a verdict")
     r.add_argument("key", help="project:newer:older")
     r.add_argument("verdict", choices=VERDICTS)
@@ -236,7 +282,7 @@ def main():
     r.add_argument("--by", default="claude-code session",
                    help="who judged it; shown on the card")
     args = ap.parse_args()
-    return cmd_list(args) if args.cmd == "list" else cmd_record(args)
+    return {"list": cmd_list, "done": cmd_done, "record": cmd_record}[args.cmd](args)
 
 
 if __name__ == "__main__":

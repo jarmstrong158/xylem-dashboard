@@ -88,7 +88,10 @@ export default {
         // "pages" carries no per-item identity -- it asks the desktop to rebuild
         // every stale page. Pages are build artifacts regenerated from entries,
         // so this is deterministic work, not a decision.
-        if (!["link", "candidate", "pages"].includes(kind)) return json({ error: "bad kind" }, 400);
+        // "quality" asks for a project's flagged entries to be repaired. Like
+        // "link" and "candidate" it only ever files a request; the repair is
+        // done by a session agent with context-keeper's own update_entry.
+        if (!["link", "candidate", "pages", "quality"].includes(kind)) return json({ error: "bad kind" }, 400);
         // "eval" asks the desktop to have an agent AUDIT the pair and report
         // back. It is still only an intent -- it authorises reading, never a
         // write, and the ruling stays with whoever taps Apply afterwards.

@@ -278,6 +278,34 @@ def _find_entry_anywhere(entry_id):
     return None, None
 
 
+# One request per project rather than per entry: 325 flagged entries would be
+# 325 taps and 325 files, and the repairs share context anyway -- the same tag
+# vocabulary, the same scope paths, the same reason an entry went unused.
+QUALITY_CAP = 40
+
+
+def _quality_gaps_for(project):
+    """A project's flagged entries, straight out of the published snapshot.
+
+    verify_quality already did the analysis and, for the two mechanical classes,
+    already names the fix -- `isolated` lists the exact ids to link and
+    `global_scope` names the path it should carry. Re-deriving that here would
+    be a second implementation that drifts from the one the dashboard shows."""
+    try:
+        with open(os.path.join(ROOT, "snapshot.json"), encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, ValueError):
+        return None
+    for p in snap.get("projects", []):
+        if p.get("name") != project:
+            continue
+        q = p.get("quality") or {}
+        if not q.get("checked"):
+            return None
+        return q.get("gaps") or []
+    return None
+
+
 def _law_text(law_id):
     """The law as the dashboard last published it.
 
@@ -308,7 +336,22 @@ def file_eval(item, dry):
     an entry it does not cite, and what would change if it did."""
     os.makedirs(EVAL_PENDING, exist_ok=True) if not dry else None
 
-    if item.get("kind") == "candidate":
+    if item.get("kind") == "quality":
+        project = item.get("project")
+        gaps = _quality_gaps_for(project)
+        if gaps is None:
+            return f"SKIP  repair {project}: no quality data in snapshot.json", "skipped"
+        if not gaps:
+            return f"SKIP  repair {project}: nothing flagged", "skipped"
+        if dry:
+            return f"would file repair for {project} ({len(gaps)} entries)", "dry-run"
+        key = "quality:%s" % project
+        payload = {"key": key, "eval_kind": "quality", "project": project,
+                   "flagged": len(gaps), "entries": gaps[:QUALITY_CAP],
+                   "capped": max(0, len(gaps) - QUALITY_CAP),
+                   "requested_at": _now()}
+        label = "filed for repair %s (%d entries)" % (project, len(gaps))
+    elif item.get("kind") == "candidate":
         law_id, entry_id = item.get("law"), item.get("older")
         law = _law_text(law_id)
         if law is None:
