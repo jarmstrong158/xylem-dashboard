@@ -147,6 +147,10 @@ function renderBanners(snap) {
 
 /* ---------------------------------------------------------------- lessons */
 function renderLessons(snap) {
+  // Reset before the cards are built, for the same reason renderLinks does:
+  // a re-render must recount, not accumulate. Separate bucket from links, so
+  // each bar acts only on its own list.
+  BULK.lessons = { send: [], apply: [] };
   const L = snap.lessons || { laws: [] };
   if (!L.laws.length) {
     $("#view-lessons").innerHTML = `<p class="empty">No concept pages yet.
@@ -202,6 +206,8 @@ function renderLessons(snap) {
               // would have to guess which store holds it.
               const cpayload = { kind: "candidate", subject, law: law.id,
                                  older: e, project: (cand || {}).project };
+              bulkNote("lessons", cpayload, cev,
+                       (law.unincorporated_awaiting || []).includes(e));
               return `<div class="candidate" data-subject="${esc(subject)}">
                 <code>${esc(e)}</code>
                 ${cand && cand.title
@@ -226,7 +232,10 @@ function renderLessons(snap) {
       </div>
     </article>`;
   });
-  $("#view-lessons").innerHTML = head + cards.join("");
+  // Built AFTER the cards, because bulkNote fills the bucket during that map.
+  // Its bucket holds only law candidates, so these buttons never touch a link
+  // proposal.
+  $("#view-lessons").innerHTML = head + bulkBar("lessons") + cards.join("");
 }
 
 /* --------------------------------------------------------------- projects */
@@ -462,6 +471,85 @@ const IMPLIES = {
   unsure: null,
 };
 
+/* Bulk actions, collected during render so the buttons count exactly what is on
+   screen rather than re-deriving eligibility from the snapshot and drifting.
+   Keyed by view; each render replaces its own bucket. */
+const BULK = { links: { send: [], apply: [] }, lessons: { send: [], apply: [] } };
+
+function bulkNote(view, payload, ev, awaiting) {
+  if (QUEUE.get(payload.subject)) return;          // already decided this session
+  if (!ev && !awaiting) BULK[view].send.push(payload);
+  const imp = ev && IMPLIES[ev.verdict];
+  if (imp) BULK[view].apply.push({ ...payload, action: imp.action });
+}
+
+/* Two taps for the bulk apply, one for the bulk send.
+   Sending costs nothing and is trivially reversible by ignoring the result.
+   Applying commits N rulings to stores in one gesture on a phone, where a
+   mis-tap is easy and the undo is a backup directory. The count is in the
+   confirm label so you are agreeing to a number, not to a word. */
+function bulkBar(view) {
+  if (!queueAvailable) return "";
+  const b = BULK[view];
+  if (!b.send.length && !b.apply.length) return "";
+  return `<div class="bulkbar" data-view="${esc(view)}">
+    ${b.send.length ? `<button class="act bulk" data-bulk="send" data-view="${esc(view)}">
+        Send all ${b.send.length} for eval</button>` : ""}
+    ${b.apply.length ? `<button class="act bulk implement" data-bulk="apply" data-view="${esc(view)}">
+        Apply all ${b.apply.length} recommendations</button>` : ""}
+    <span class="bulk-status"></span>
+  </div>`;
+}
+
+async function runBulk(view, which, btn) {
+  const items = BULK[view][which];
+  const bar = btn.closest(".bulkbar");
+  const status = bar.querySelector(".bulk-status");
+  bar.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+  let ok = 0, failed = 0;
+  for (const it of items) {
+    const payload = which === "send" ? { ...it, action: "eval" } : it;
+    try {
+      const r = await fetch("api/queue", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      QUEUE.set(payload.subject, payload);
+      ok++;
+      // Paint each row as it lands, so a long run visibly progresses instead of
+      // looking hung.
+      const row = document.querySelector(`[data-subject="${CSS.escape(payload.subject)}"]`);
+      if (row) paintDecision(row, payload.action);
+    } catch { failed++; }
+    status.textContent = `${ok} queued${failed ? `, ${failed} failed` : ""}…`;
+  }
+  status.textContent = failed
+    ? `${ok} queued, ${failed} failed — reload and retry the rest`
+    : `${ok} queued. They apply on the next drain.`;
+  bar.querySelectorAll("button").forEach((x) => x.remove());
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button.act.bulk");
+  if (!btn) return;
+  const { bulk: which, view } = btn.dataset;
+  const n = BULK[view][which].length;
+  if (which === "apply" && btn.dataset.confirm !== "1") {
+    btn.dataset.confirm = "1";
+    btn.textContent = `Tap again to apply ${n} rulings`;
+    setTimeout(() => {
+      if (btn.dataset.confirm === "1") {
+        btn.dataset.confirm = "";
+        btn.textContent = `Apply all ${n} recommendations`;
+      }
+    }, 6000);
+    return;
+  }
+  runBulk(view, which, btn);
+});
+
 function evalBlock(ev, payload) {
   const v = EVAL_VERDICT[ev.verdict] || { label: ev.verdict || "audited", cls: "unknown" };
   const conf = ev.confidence != null ? ` · confidence ${esc(String(ev.confidence))}` : "";
@@ -482,6 +570,10 @@ function evalBlock(ev, payload) {
 
 /* ------------------------------------------------------------------ links */
 function renderLinks(snap) {
+  // Reset first: a re-render must recount, never accumulate. And this bucket
+  // only ever receives LINK proposals, so the links bar can never act on a law
+  // candidate, or vice versa.
+  BULK.links = { send: [], apply: [] };
   const blocks = snap.projects.map((p) => {
     const l = p.links || {};
     if (!l.checked) {
@@ -494,6 +586,7 @@ function renderLinks(snap) {
       const subject = `${p.name}:${r.newer_id}:${r.older_id}`;
       const payload = { kind: "link", subject, project: p.name,
                         older: r.older_id, newer: r.newer_id };
+      bulkNote("links", payload, r.eval, r.awaiting_eval);
       return `<article class="row" data-subject="${esc(subject)}">
       <div class="head">
         <span class="title"><code>${esc(r.newer_id)}</code> may supersede
@@ -536,6 +629,7 @@ function renderLinks(snap) {
       the PC, which reads both entries in full and reports back here with its
       reasoning. Nothing extra is spent and nothing is written to a store — the
       ruling stays yours.</div>`
+    + bulkBar("links")
     + blocks.join("");
 }
 

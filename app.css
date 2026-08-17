@@ -336,6 +336,17 @@ details.more > summary:hover { text-decoration: underline; }
   color: var(--series-1); text-transform: uppercase;
   align-self: center;
 }
+/* Bulk actions, pinned above the list they act on. Deliberately inside the view
+   rather than in the page header: a control that acts on ONE list must sit with
+   that list, or it reads as global. */
+.bulkbar {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  margin: 0 0 14px; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.bulk-status { font-size: .78rem; color: var(--ink-2); }
+
 /* Filed and waiting on a reader.
    Amber, because that is already this app's pending tone (stale pages, "N to
    review") -- and NOT the series accent, which means "recommended": the two
