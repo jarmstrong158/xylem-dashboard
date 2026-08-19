@@ -891,8 +891,19 @@ def main():
     dry = "--dry-run" in sys.argv
     try:
         items = fetch_queue()
-    except Exception as e:
+    except Exception as e:                       # noqa: BLE001 - report, never crash
+        # The queue is remote; the sweep is not. A DNS blip or a dropped link
+        # should not also stop finished requests being retired, or local work
+        # sits looking outstanding until the network happens to come back.
         print("could not reach the queue:", e)
+        try:
+            dec = load_decisions()
+            swept = sweep_finished_requests(dec)
+            if swept:
+                save_decisions(dec)
+                print("  (offline) closed %d finished request(s)" % len(swept))
+        except Exception as inner:               # noqa: BLE001
+            print("  sweep also failed:", inner)
         return 1
     if not items:
         # Still sweep. Requests are answered BETWEEN drains -- a session writes
