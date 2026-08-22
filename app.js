@@ -284,6 +284,13 @@ function renderProjects(snap) {
     chart + `<div class="section-h">All projects</div><div class="grid">${cards.join("")}</div>`;
 }
 
+/* Shared by any view whose control is not a link/candidate row. */
+function decidedTag(subject) {
+  const d = QUEUE.get(subject);
+  if (!d) return "";
+  return `<span class="decided">${esc(DECISION_LABEL[d.action] || d.action)}</span>`;
+}
+
 /* -------------------------------------------------------------- synthesis */
 /* The law tier's own work list is law-centric: it asks what each law fails to
    cite. That question cannot see a project whose knowledge never became a law,
@@ -327,7 +334,7 @@ function renderSynthesis(snap) {
     const payload = { kind: "synthesis", project: p.name,
                       subject: "synthesis:" + p.name, entries: s.unsynthesized };
     const awaiting = (snap.awaiting_synthesis || []).includes("synthesis:" + p.name);
-    return `<article class="card">
+    return `<article class="card" data-subject="${esc(payload.subject)}">
       <div class="head" style="display:flex;justify-content:space-between;gap:10px">
         <span class="title">${esc(p.name)}</span>
         <span class="meta">${s.generalized_pct}%</span>
@@ -349,10 +356,13 @@ function renderSynthesis(snap) {
       </div>
       ${orphan ? `<div style="margin-top:11px">
         ${detailsFor(s.unsynthesized, "")}
-        ${queueAvailable && !awaiting
-          ? `<button class="act eval" data-payload="${esc(JSON.stringify(payload))}"
-               data-eval="1">Draft a law from these ${orphan}</button>`
-          : awaiting ? `<span class="await-tag">sent · awaiting a drafted law</span>` : ""}
+        <span class="actions">${
+          decidedTag(payload.subject) ||
+          (queueAvailable && !awaiting
+            ? `<button class="act eval" data-payload="${esc(JSON.stringify(payload))}"
+                 data-eval="1">Draft a law from these ${orphan}</button>`
+            : awaiting ? `<span class="await-tag">sent · awaiting a drafted law</span>` : "")
+        }</span>
       </div>` : ""}
     </article>`;
   });
@@ -1026,6 +1036,18 @@ async function loadQueue() {
 
 async function decide(payload, btn) {
   const row = btn.closest("[data-subject]");
+  if (!row) {
+    /* Every control lives inside an element carrying data-subject; a button
+       rendered without one threw here BEFORE the fetch, so the tap made no
+       request, painted nothing, and reported nothing -- it read as a dead
+       button. A missing wrapper is a bug in the view, and it says so. */
+    btn.replaceWith(Object.assign(document.createElement("span"), {
+      className: "decided bad",
+      textContent: "this control is missing its data-subject — nothing was sent",
+    }));
+    console.error("decide(): no [data-subject] ancestor for", payload);
+    return;
+  }
   row.dataset.pending = "1";
   try {
     const r = await fetch("api/queue", {
@@ -1042,7 +1064,9 @@ async function decide(payload, btn) {
     const err = document.createElement("span");
     err.className = "decided bad";
     err.textContent = "could not queue — try again";
-    row.querySelector(".actions").replaceChildren(err);
+    const box = row.querySelector(".actions");
+    if (box) box.replaceChildren(err);
+    else row.append(err);
   }
 }
 

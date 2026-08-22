@@ -93,7 +93,10 @@ export default {
         // done by a session agent with context-keeper's own update_entry.
         // "repair" rules on one PROPOSED edit to one entry. Same footing as a
         // link verdict: the agent proposes the new text, the tap applies it.
-        if (!["link", "candidate", "pages", "quality", "repair"].includes(kind)) return json({ error: "bad kind" }, 400);
+        // "synthesis" names a project whose entries no law cites, and asks a
+        // session agent to DRAFT one. Like the others it only files a request:
+        // writing the law is judgement, and it still has to be approved.
+        if (!["link", "candidate", "pages", "quality", "repair", "synthesis"].includes(kind)) return json({ error: "bad kind" }, 400);
         // "eval" asks the desktop to have an agent AUDIT the pair and report
         // back. It is still only an intent -- it authorises reading, never a
         // write, and the ruling stays with whoever taps Apply afterwards.
@@ -110,6 +113,14 @@ export default {
           older: String(body.older || "").slice(0, 80),
           newer: String(body.newer || "").slice(0, 80),
           law: String(body.law || "").slice(0, 200),
+          // Entry ids a "synthesis" intent names. Carried rather than
+          // recomputed at drain time so the tap means the entries that were on
+          // screen when it was tapped, not whatever the set has drifted to.
+          // Bounded on both axes: KV values are capped, and an unbounded list
+          // from a client is an unbounded write.
+          entries: Array.isArray(body.entries)
+            ? body.entries.slice(0, 40).map((e) => String(e).slice(0, 80))
+            : [],
           at: new Date().toISOString(),
         };
         // Keyed by subject so deciding twice replaces rather than duplicates.

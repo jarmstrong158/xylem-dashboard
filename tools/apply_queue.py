@@ -942,6 +942,18 @@ def apply_link(item, dry):
 
 
 def main():
+    # An unrecognised flag must REFUSE, never be ignored. `--dry` was accepted
+    # in silence and the drain applied 8 real edits while reporting a dry run:
+    # a safety flag that does nothing is worse than no safety flag, because it
+    # is trusted. Systems fail by proceeding.
+    KNOWN = {"--dry-run", "--once", "--verbose"}
+    unknown = [a for a in sys.argv[1:] if a.startswith("-") and a not in KNOWN]
+    if unknown:
+        print("unknown option(s): %s" % " ".join(unknown), file=sys.stderr)
+        print("known: %s" % " ".join(sorted(KNOWN)), file=sys.stderr)
+        print("refusing to run -- a misread flag would apply real edits.",
+              file=sys.stderr)
+        return 2
     dry = "--dry-run" in sys.argv
     try:
         items = fetch_queue()
