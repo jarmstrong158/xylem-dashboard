@@ -284,6 +284,82 @@ function renderProjects(snap) {
     chart + `<div class="section-h">All projects</div><div class="grid">${cards.join("")}</div>`;
 }
 
+/* -------------------------------------------------------------- synthesis */
+/* The law tier's own work list is law-centric: it asks what each law fails to
+   cite. That question cannot see a project whose knowledge never became a law,
+   because having no law to fall behind reads exactly like having nothing to
+   say. This view asks it from the project end instead. */
+function renderSynthesis(snap) {
+  const rows = snap.projects
+    .map((p) => ({ p, s: p.synthesis }))
+    .filter((r) => r.s)
+    .sort((a, b) => (a.s.generalized_pct - b.s.generalized_pct)
+                 || (b.s.active - a.s.active));
+  if (!rows.length) {
+    $("#view-synthesis").innerHTML = `<p class="empty">This snapshot predates the
+      synthesis block. Re-publish to compute it.</p>`;
+    return;
+  }
+  const silent = rows.filter((r) => r.s.law_count === 0 && r.s.active >= 10);
+  const totalActive = rows.reduce((n, r) => n + r.s.active, 0);
+  const totalFed = rows.reduce((n, r) => n + r.s.feeding_laws.length, 0);
+
+  const head = `<div class="card">
+    <div class="section-h" style="margin:0 0 10px">Knowledge that reached the law tier</div>
+    <div class="value" style="font-size:1.6rem;font-weight:640">${totalFed} of ${totalActive}</div>
+    <div class="meta">active entries are cited by at least one cross-project law
+      · ${plural(snap.totals.laws || 0, "law", "laws")} in total</div>
+    ${meter(totalActive ? totalFed / totalActive : 0,
+            totalFed / Math.max(1, totalActive) < 0.25 ? "warn" : "good")}
+    ${silent.length ? `<div class="note warn" style="margin-top:12px">
+      <b>${plural(silent.length, "project has", "projects have")} generalized nothing.</b>
+      ${esc(silent.map((r) => r.p.name).join(", "))} — ${silent.length === 1
+        ? "it holds" : "each holds"} ten or more settled entries that no law
+      draws on. Nothing else in the mesh reports
+      this: a project with no law never appears in a law's work list.</div>` : ""}
+  </div>`;
+
+  const cards = rows.map(({ p, s }) => {
+    const orphan = s.unsynthesized.length;
+    const pending = s.awaiting_incorporation.length;
+    const tone = s.law_count === 0 && s.active >= 10 ? "warn"
+               : s.generalized_pct >= 25 ? "good" : "";
+    const payload = { kind: "synthesis", project: p.name,
+                      subject: "synthesis:" + p.name, entries: s.unsynthesized };
+    const awaiting = (snap.awaiting_synthesis || []).includes("synthesis:" + p.name);
+    return `<article class="card">
+      <div class="head" style="display:flex;justify-content:space-between;gap:10px">
+        <span class="title">${esc(p.name)}</span>
+        <span class="meta">${s.generalized_pct}%</span>
+      </div>
+      ${meter(s.generalized_pct / 100, tone)}
+      <div class="meta" style="margin-top:8px">
+        ${s.feeding_laws.length} of ${s.active} entries feed
+        ${plural(s.law_count, "law", "laws")}
+      </div>
+      <div class="foot" style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--ink-2)">
+          <span class="dot ${orphan ? "warn" : "good"}"></span>
+          <span>${orphan ? `${plural(orphan, "entry", "entries")} no law reaches for`
+                         : "every entry is accounted for"}</span>
+        </div>
+        ${pending ? `<div style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--ink-2)">
+          <span class="dot"></span><span>${pending} already queued as law candidates</span>
+        </div>` : ""}
+      </div>
+      ${orphan ? `<div style="margin-top:11px">
+        ${detailsFor(s.unsynthesized, "")}
+        ${queueAvailable && !awaiting
+          ? `<button class="act eval" data-payload="${esc(JSON.stringify(payload))}"
+               data-eval="1">Draft a law from these ${orphan}</button>`
+          : awaiting ? `<span class="await-tag">sent · awaiting a drafted law</span>` : ""}
+      </div>` : ""}
+    </article>`;
+  });
+  $("#view-synthesis").innerHTML =
+    head + `<div class="section-h">By project</div><div class="grid">${cards.join("")}</div>`;
+}
+
 /* ----------------------------------------------------------------- chains */
 function buildChains(project) {
   const edges = project.supersession_edges || [];
@@ -317,34 +393,107 @@ function buildChains(project) {
   return { chains, rendered };
 }
 
-function renderChains(snap) {
-  const blocks = [];
-  let dropped = 0;
-  for (const p of snap.projects) {
-    const { chains, rendered } = buildChains(p);
-    const total = (p.supersession_edges || []).length;
-    dropped += Math.max(0, total - rendered.size);
-    if (!chains.length) continue;
-    const rows = chains.map((chain) => {
-      const parts = chain.map((n, i) => {
-        const cls = n.dangling ? "node missing"
-          : (n.entry && n.entry.status === "superseded") ? "node superseded" : "node";
-        const full = n.dangling ? `${n.id} (missing)` : label(n.entry, snap.includes_bodies);
-        const arrow = i < chain.length - 1 ? `<span class="arrow">→</span>` : "";
-        return `<span class="${cls}" title="${esc(n.id)} — ${esc(full)}">${
-          esc(clamp(full))}</span>${arrow}`;
-      });
-      return `<div class="row"><div class="chain">${parts.join("")}</div></div>`;
-    });
-    blocks.push(`<div class="section-h">${esc(p.name)}</div>${rows.join("")}`);
+function layoutDag(project) {
+  /* Layer by longest path from a root, so an entry always sits to the right of
+     everything it replaced. The previous view walked single paths and silently
+     dropped any edge that did not fit one -- two entries superseded by the same
+     target lost a whole branch. A layered graph draws every edge or says why. */
+  const edges = project.supersession_edges || [];
+  if (!edges.length) return null;
+  const byId = new Map((project.entries || []).map((e) => [e.id, e]));
+  const ids = new Set();
+  const out = new Map(), indeg = new Map();
+  for (const e of edges) {
+    ids.add(e.from); ids.add(e.to);
+    (out.get(e.from) || out.set(e.from, []).get(e.from)).push(e);
+    indeg.set(e.to, (indeg.get(e.to) || 0) + 1);
+    if (!indeg.has(e.from)) indeg.set(e.from, indeg.get(e.from) || 0);
   }
-  const note = dropped
-    ? `<div class="note warn"><b>${plural(dropped, "edge", "edges")} not drawn.</b>
-       A cycle or a shape this path view cannot express — the edge exists in the
-       data even though no chain below shows it.</div>` : "";
+  /* Kahn: anything left with edges after this sits in a cycle. It gets drawn
+     too, in its own band, rather than vanishing. */
+  const depth = new Map([...ids].map((i) => [i, 0]));
+  const deg = new Map([...ids].map((i) => [i, indeg.get(i) || 0]));
+  const q = [...ids].filter((i) => !deg.get(i));
+  const order = [];
+  while (q.length) {
+    const n = q.shift(); order.push(n);
+    for (const e of out.get(n) || []) {
+      depth.set(e.to, Math.max(depth.get(e.to), depth.get(n) + 1));
+      deg.set(e.to, deg.get(e.to) - 1);
+      if (!deg.get(e.to)) q.push(e.to);
+    }
+  }
+  const cyclic = [...ids].filter((i) => !order.includes(i));
+  const maxD = Math.max(0, ...[...depth.values()]);
+  for (const i of cyclic) depth.set(i, maxD + 1);
+  const lanes = new Map();
+  const pos = new Map();
+  for (const id of [...ids].sort((a, b) => depth.get(a) - depth.get(b) || a.localeCompare(b))) {
+    const d = depth.get(id);
+    const lane = lanes.get(d) || 0;
+    lanes.set(d, lane + 1);
+    pos.set(id, { col: d, row: lane });
+  }
+  return { edges, byId, pos, ids, cyclic: new Set(cyclic),
+           cols: Math.max(...[...pos.values()].map((p) => p.col)) + 1,
+           rows: Math.max(...[...pos.values()].map((p) => p.row)) + 1 };
+}
+
+function renderChains(snap) {
+  const CW = 186, CH = 46, GX = 40, GY = 16, PAD = 10;
+  const blocks = [];
+  let drawn = 0, total = 0;
+  for (const p of snap.projects) {
+    const g = layoutDag(p);
+    total += (p.supersession_edges || []).length;
+    if (!g) continue;
+    const W = PAD * 2 + g.cols * CW + (g.cols - 1) * GX;
+    const H = PAD * 2 + g.rows * CH + (g.rows - 1) * GY;
+    const xy = (id) => {
+      const q = g.pos.get(id);
+      return { x: PAD + q.col * (CW + GX), y: PAD + q.row * (CH + GY) };
+    };
+    const lines = g.edges.map((e) => {
+      drawn++;
+      const a = xy(e.from), b = xy(e.to);
+      const x1 = a.x + CW, y1 = a.y + CH / 2, x2 = b.x, y2 = b.y + CH / 2;
+      const mid = x1 + (x2 - x1) / 2;
+      const cls = e.dangling ? "edge dangling" : "edge";
+      return `<path class="${cls}" d="M${x1} ${y1} C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}"
+                marker-end="url(#ar)"/>`;
+    });
+    const boxes = [...g.ids].map((id) => {
+      const q = xy(id), e = g.byId.get(id);
+      const missing = !e;
+      const cls = missing ? "gnode missing"
+        : e.status === "superseded" ? "gnode superseded" : "gnode";
+      const text = missing ? `${id} (missing)` : label(e, snap.includes_bodies);
+      return `<g class="${cls}" transform="translate(${q.x},${q.y})">
+        <rect width="${CW}" height="${CH}" rx="7"/>
+        <title>${esc(id)} — ${esc(text)}</title>
+        <text x="10" y="18" class="gid">${esc(id)}</text>
+        <text x="10" y="34" class="glabel">${esc(clamp(text, 26))}</text>
+      </g>`;
+    });
+    const cyc = g.cyclic.size
+      ? `<div class="note warn"><b>${plural(g.cyclic.size, "entry sits", "entries sit")}
+         in a supersession cycle.</b> Drawn in the last column — A replaced B
+         replaced A is a store bug, not a history.</div>` : "";
+    blocks.push(`<div class="section-h">${esc(p.name)}</div>${cyc}
+      <div class="card graphwrap"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"
+        role="img" aria-label="Supersession graph for ${esc(p.name)}">
+        <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7"
+          markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+        ${lines.join("")}${boxes.join("")}
+      </svg></div>`);
+  }
+  const missed = Math.max(0, total - drawn);
+  const note = missed
+    ? `<div class="note warn"><b>${plural(missed, "edge", "edges")} not drawn.</b></div>`
+    : "";
   $("#view-chains").innerHTML = blocks.length
     ? note + blocks.join("")
-    : note + `<p class="empty">No supersession edges recorded. Either nothing has
+    : `<p class="empty">No supersession edges recorded. Either nothing has
        replaced anything, or reversals are landing as in-place edits.</p>`;
 }
 
@@ -1061,7 +1210,7 @@ document.addEventListener("click", (e) => {
 });
 
 /* ------------------------------------------------------------------- boot */
-const VIEWS = ["lessons", "projects", "chains", "pages", "links", "quality"];
+const VIEWS = ["lessons", "projects", "synthesis", "chains", "pages", "links", "quality"];
 
 function switchTo(view) {
   if (!VIEWS.includes(view)) return;
@@ -1081,6 +1230,7 @@ function counts(snap) {
   const set = (id, n) => { const el = $(id); if (el && n) el.textContent = n; };
   set("#n-lessons", (snap.lessons || {}).count);
   set("#n-projects", t.projects);
+  set("#n-synthesis", t.projects_generalizing_nothing);
   set("#n-chains", snap.projects.reduce((a, p) => a + (p.supersession_edges || []).length, 0));
   set("#n-pages", t.pages);
   set("#n-links", t.link_proposals);
@@ -1126,6 +1276,7 @@ fetch("snapshot.json", { cache: "no-store" })
     counts(snap);
     renderLessons(snap);
     renderProjects(snap);
+    renderSynthesis(snap);
     renderChains(snap);
     renderPages(snap);
     renderLinks(snap);

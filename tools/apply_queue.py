@@ -219,6 +219,22 @@ def _now():
 _UNACTIONABLE = frozenset(("unused",))
 
 
+def _feeding_laws(project):
+    """Ids in `project` that some law now cites, per the current snapshot.
+
+    Empty when the snapshot predates the synthesis block, which keeps a filed
+    request OPEN rather than closing it on missing data."""
+    try:
+        with open(os.path.join(ROOT, "snapshot.json"), encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, ValueError):
+        return set()
+    for p in snap.get("projects") or []:
+        if p.get("name") == project:
+            return set((p.get("synthesis") or {}).get("feeding_laws") or [])
+    return set()
+
+
 def sweep_finished_requests(dec):
     """Close every filed request whose work is done. Mechanical, so automatic.
 
@@ -244,7 +260,17 @@ def sweep_finished_requests(dec):
             continue
         key = req.get("key")
         entries = req.get("entries")
-        if entries:
+        kind_ = req.get("eval_kind")
+        if kind_ == "synthesis":
+            # Dispatch on the KIND, never on "does it have an entries list".
+            # A synthesis request has one too, keyed entry_id rather than id,
+            # so the quality test below reads every entry as unflagged and
+            # closes the request on its first sweep -- filed and finished
+            # without anyone seeing it.
+            fed = _feeding_laws(req.get("project"))
+            done = bool(fed) and any(
+                e.get("entry_id") in fed for e in entries or [])
+        elif entries:
             proj = req.get("project")
             # The live gap list is the truth, not the proposal ledger. A
             # proposal that was APPROVED is deleted when it applies, so judging
@@ -699,6 +725,9 @@ def _quality_all(item, dec, dry):
             % (cls, filed)), "ok"
 
 
+SYNTHESIS_CAP = 24
+
+
 def file_eval(item, dec, dry):
     """Write a self-contained audit request. Touches no store.
 
@@ -741,6 +770,31 @@ def file_eval(item, dec, dry):
                    "auto_linked": linked, "requested_at": _now()}
         label = ("repaired %s: %d linked automatically, %d filed for reading"
                  % (project, linked, len(remaining)))
+    elif item.get("kind") == "synthesis":
+        # A project whose knowledge never became a law appears in no law's work
+        # list, so nothing else in the mesh will ever ask for this. The request
+        # carries the entries IN FULL: writing a law is judgement, and judgement
+        # needs the prose, not a list of ids to go look up.
+        project = item.get("project")
+        ids = [str(x) for x in (item.get("entries") or [])][:SYNTHESIS_CAP]
+        if not ids:
+            return f"SKIP  synthesis {project}: no entries named", "skipped"
+        bodies = []
+        for eid in ids:
+            e = _entry_text(project, eid)
+            if e is not None:
+                bodies.append({"entry_id": eid, "entry": e})
+        if not bodies:
+            return f"SKIP  synthesis {project}: no entry resolved", "skipped"
+        if dry:
+            return f"would file synthesis {project}: {len(bodies)} entries", "dry-run"
+        key = "synthesis:%s" % project
+        payload = {"key": key, "eval_kind": "synthesis", "project": project,
+                   "entries": bodies, "named": len(ids),
+                   "capped": max(0, len(item.get("entries") or []) - SYNTHESIS_CAP),
+                   "requested_at": _now()}
+        label = ("filed synthesis %s: %d entries with no law"
+                 % (project, len(bodies)))
     elif item.get("kind") == "candidate":
         law_id, entry_id = item.get("law"), item.get("older")
         law = _law_text(law_id)
@@ -967,6 +1021,10 @@ def main():
                 msg, outcome = apply_repair(it, dec, dry)
             print("  " + msg)
             rec.update(outcome=outcome, subject=key_)
+        elif kind == "synthesis":
+            msg, outcome = file_eval(it, dec, dry)
+            print("  " + msg)
+            rec.update(project=it.get("project"), outcome=outcome)
         elif kind == "pages":
             msg, outcome = recompile_stale(it, dry)
             print("  " + msg)

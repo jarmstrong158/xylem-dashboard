@@ -460,3 +460,26 @@ table.tv th, table.tv td {
 table.tv th { color: var(--ink-muted); font-weight: 600; font-size: .74rem;
   text-transform: uppercase; letter-spacing: .04em; }
 table.tv td.n { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------- supersession graph (DAG)
+   A wide graph scrolls inside its own container; the page body must never
+   scroll sideways on a phone. */
+.graphwrap { overflow-x: auto; padding: 10px; -webkit-overflow-scrolling: touch; }
+.graphwrap svg { display: block; max-width: none; }
+.graphwrap .edge {
+  fill: none; stroke: var(--line-strong); stroke-width: 1.6;
+}
+.graphwrap .edge.dangling { stroke: var(--critical); stroke-dasharray: 4 3; }
+.graphwrap marker path { fill: var(--line-strong); }
+.gnode rect {
+  fill: var(--surface-sunk); stroke: var(--line-strong); stroke-width: 1;
+}
+.gnode.superseded rect { fill: transparent; }
+.gnode.missing rect { stroke: var(--critical); stroke-dasharray: 4 3; }
+.gnode .gid {
+  font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+  fill: var(--ink-2);
+}
+.gnode .glabel { font-size: 11.5px; fill: var(--ink); }
+.gnode.superseded .glabel, .gnode.superseded .gid { fill: var(--ink-muted); }
+.gnode.missing .glabel, .gnode.missing .gid { fill: var(--critical); }

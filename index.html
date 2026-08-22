@@ -17,7 +17,7 @@
      change: the page renders as a mix of new markup and stale styles, which
      looks like the dashboard is broken. BUMP THIS on any change to app.css or
      app.js, and bump SHELL in sw.js to match. -->
-<link rel="stylesheet" href="app.css?v=25">
+<link rel="stylesheet" href="app.css?v=27">
 </head>
 <body>
 
@@ -40,6 +40,7 @@
   <nav class="tabs" role="tablist" aria-label="Views">
     <button class="tab" role="tab" data-view="lessons" aria-selected="true">What we've learned<span class="n" id="n-lessons"></span></button>
     <button class="tab" role="tab" data-view="projects" aria-selected="false">Projects<span class="n" id="n-projects"></span></button>
+    <button class="tab" role="tab" data-view="synthesis" aria-selected="false">Synthesis<span class="n" id="n-synthesis"></span></button>
     <button class="tab" role="tab" data-view="chains" aria-selected="false">Supersession<span class="n" id="n-chains"></span></button>
     <button class="tab" role="tab" data-view="pages" aria-selected="false">Pages<span class="n" id="n-pages"></span></button>
     <button class="tab" role="tab" data-view="links" aria-selected="false">Links<span class="n" id="n-links"></span></button>
@@ -49,6 +50,7 @@
   <main>
     <section id="view-lessons" class="view" aria-label="What we've learned"></section>
     <section id="view-projects" class="view" hidden aria-label="Projects"></section>
+    <section id="view-synthesis" class="view" hidden aria-label="Synthesis gaps"></section>
     <section id="view-chains" class="view" hidden aria-label="Supersession chains"></section>
     <section id="view-pages" class="view" hidden aria-label="Pages"></section>
     <section id="view-links" class="view" hidden aria-label="Proposed links"></section>
@@ -62,6 +64,6 @@
   </footer>
 </div>
 
-<script src="app.js?v=25"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>
